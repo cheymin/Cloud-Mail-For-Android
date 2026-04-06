@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPN转发服务 - 管理后台</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --border: #334155;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      padding: 40px 0;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+
+    header h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      margin-top: 8px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg-dark);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-value.success {
+      color: var(--secondary);
+    }
+
+    .stat-value.warning {
+      color: var(--warning);
+    }
+
+    .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .progress-container {
+      margin: 20px 0;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 0.875rem;
+    }
+
+    .progress-bar {
+      height: 12px;
+      background: var(--bg-dark);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
+      border-radius: 6px;
+      transition: width 0.5s ease;
+    }
+
+    .progress-fill.warning {
+      background: linear-gradient(90deg, var(--warning) 0%, #f97316 100%);
+    }
+
+    .progress-fill.danger {
+      background: linear-gradient(90deg, var(--danger) 0%, #dc2626 100%);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+
+    .btn-success {
+      background: var(--secondary);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-full {
+      width: 100%;
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid var(--secondary);
+      color: var(--secondary);
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+
+    .alert-info {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .info-box {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--primary);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .info-box h4 {
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .info-box p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .info-box code {
+      background: var(--bg-dark);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .user-info {
+      background: var(--bg-dark);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .user-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .user-info-row:last-child {
+      border-bottom: none;
+    }
+
+    .user-info-label {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .user-info-value {
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+
+    .copy-btn:hover {
+      background: var(--border);
+      color: var(--text-primary);
+    }
+
+    .step-list {
+      counter-reset: step;
+    }
+
+    .step-item {
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 20px;
+    }
+
+    .step-item::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    .step-item h4 {
+      margin-bottom: 8px;
+    }
+
+    .step-item p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      
+      header h1 {
+        font-size: 1.5rem;
+      }
+      
+      .btn-group {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🚀 VPN转发服务</h1>
+      <p>Netlify部署 · 流量管理 · 一键配置</p>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="alert-container"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <h2>流量使用情况</h2>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">已使用</div>
+          <div class="stat-value" id="used-traffic">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">剩余</div>
+          <div class="stat-value success" id="remaining-traffic">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">请求次数</div>
+          <div class="stat-value" id="request-count">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">重置倒计时</div>
+          <div class="stat-value" id="reset-days">--</div>
+        </div>
+      </div>
+      <div class="progress-container">
+        <div class="progress-header">
+          <span id="progress-text">0%</span>
+          <span id="progress-detail">0 B / 100 GB</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.875rem; text-align: center;">
+        📅 重置时间: <span id="reset-date">--</span>
+      </p>
+    </div>
+
+    <div id="register-section" class="card">
+      <div class="card-header">
+        <div class="card-icon">🔑</div>
+        <h2>获取配置</h2>
+      </div>
+      <div class="info-box">
+        <h4>快速开始</h4>
+        <p>点击下方按钮注册，获取你的专属Clash配置文件，导入到Clash客户端即可使用。</p>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="registerUser()">
+        🎯 立即注册获取配置
+      </button>
+    </div>
+
+    <div id="user-section" class="card hidden">
+      <div class="card-header">
+        <div class="card-icon">👤</div>
+        <h2>我的配置</h2>
+      </div>
+      
+      <div class="user-info">
+        <div class="user-info-row">
+          <span class="user-info-label">用户ID</span>
+          <span class="user-info-value">
+            <span id="user-id">--</span>
+            <button class="copy-btn" onclick="copyToClipboard(document.getElementById('user-id').textContent)">复制</button>
+          </span>
+        </div>
+        <div class="user-info-row">
+          <span class="user-info-label">节点名称</span>
+          <span class="user-info-value" id="user-name">--</span>
+        </div>
+        <div class="user-info-row">
+          <span class="user-info-label">订阅链接</span>
+          <span class="user-info-value" style="font-size: 0.75rem;">
+            <span id="subscribe-url">--</span>
+            <button class="copy-btn" onclick="copyToClipboard(document.getElementById('subscribe-url').textContent)">复制</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="downloadConfig()">
+          📥 下载配置文件
+        </button>
+        <button class="btn btn-secondary" onclick="copySubscribeUrl()">
+          📋 复制订阅链接
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📖</div>
+        <h2>使用教程</h2>
+      </div>
+      
+      <div class="step-list">
+        <div class="step-item">
+          <h4>注册获取配置</h4>
+          <p>点击上方"立即注册获取配置"按钮，系统会为你生成专属的Clash配置文件。</p>
+        </div>
+        <div class="step-item">
+          <h4>下载配置文件</h4>
+          <p>点击"下载配置文件"按钮，将config.yaml文件保存到本地。</p>
+        </div>
+        <div class="step-item">
+          <h4>导入Clash客户端</h4>
+          <p>打开Clash客户端（Clash for Windows / ClashX / Clash for Android等），选择"配置"→"导入配置文件"，选择下载的config.yaml文件。</p>
+        </div>
+        <div class="step-item">
+          <h4>开启代理</h4>
+          <p>在Clash中选择刚才导入的代理节点，开启系统代理即可使用。</p>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <h4>💡 订阅链接</h4>
+        <p>你也可以复制订阅链接，在Clash客户端中添加订阅，实现配置自动更新。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">⚠️</div>
+        <h2>注意事项</h2>
+      </div>
+      <ul style="color: var(--text-secondary); font-size: 0.875rem; padding-left: 20px;">
+        <li style="margin-bottom: 8px;">Netlify免费套餐提供 <strong style="color: var(--text-primary);">100GB/月</strong> 带宽</li>
+        <li style="margin-bottom: 8px;">流量统计每月1号自动重置</li>
+        <li style="margin-bottom: 8px;">请妥善保管你的用户ID，可用于恢复配置</li>
+        <li style="margin-bottom: 8px;">请遵守当地法律法规，合法使用本服务</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <p>VPN转发服务 v2.0 | 部署于 Netlify</p>
+  </footer>
+
+  <script>
+    const API_BASE = '/.netlify/functions';
+    let currentUser = null;
+
+    function showAlert(message, type = 'success') {
+      const container = document.getElementById('alert-container');
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showAlert('已复制到剪贴板');
+      }).catch(() => {
+        showAlert('复制失败', 'error');
+      });
+    }
+
+    async function loadStats() {
+      try {
+        const response = await fetch(`${API_BASE}/admin/stats`);
+        const stats = await response.json();
+        
+        document.getElementById('used-traffic').textContent = stats.usedFormatted;
+        document.getElementById('remaining-traffic').textContent = stats.remainingFormatted;
+        document.getElementById('request-count').textContent = stats.requests.toLocaleString();
+        document.getElementById('reset-days').textContent = `${stats.daysUntilReset} 天`;
+        document.getElementById('reset-date').textContent = stats.resetDateFormatted;
+        
+        const percentage = stats.percentage;
+        document.getElementById('progress-text').textContent = `${percentage}%`;
+        document.getElementById('progress-detail').textContent = `${stats.usedFormatted} / ${stats.totalFormatted}`;
+        
+        const progressFill = document.getElementById('progress-fill');
+        progressFill.style.width = `${percentage}%`;
+        progressFill.className = 'progress-fill';
+        
+        if (percentage > 90) {
+          progressFill.classList.add('danger');
+          document.getElementById('remaining-traffic').classList.add('danger');
+          document.getElementById('remaining-traffic').classList.remove('success');
+        } else if (percentage > 70) {
+          progressFill.classList.add('warning');
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    async function registerUser() {
+      try {
+        const response = await fetch(`${API_BASE}/proxy/register`, {
+          method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          currentUser = data;
+          
+          localStorage.setItem('vpnUserId', data.userId);
+          localStorage.setItem('vpnUserName', data.userName);
+          localStorage.setItem('vpnSubscribeUrl', data.subscribeUrl);
+          
+          document.getElementById('user-id').textContent = data.userId;
+          document.getElementById('user-name').textContent = data.userName;
+          document.getElementById('subscribe-url').textContent = data.subscribeUrl;
+          
+          document.getElementById('register-section').classList.add('hidden');
+          document.getElementById('user-section').classList.remove('hidden');
+          
+          showAlert('注册成功！请下载配置文件并导入Clash客户端');
+        } else {
+          showAlert(data.error || '注册失败', 'error');
+        }
+      } catch (error) {
+        showAlert('注册失败，请检查网络连接', 'error');
+      }
+    }
+
+    function downloadConfig() {
+      if (!currentUser) {
+        const userId = localStorage.getItem('vpnUserId');
+        if (userId) {
+          window.location.href = `${API_BASE}/proxy/config?user_id=${userId}`;
+          return;
+        }
+        showAlert('请先注册获取配置', 'error');
+        return;
+      }
+      
+      const configContent = currentUser.clashConfig;
+      const blob = new Blob([configContent], { type: 'text/yaml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vpn-config.yaml';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showAlert('配置文件下载成功！');
+    }
+
+    function copySubscribeUrl() {
+      const subscribeUrl = document.getElementById('subscribe-url').textContent;
+      copyToClipboard(subscribeUrl);
+    }
+
+    function loadSavedUser() {
+      const userId = localStorage.getItem('vpnUserId');
+      const userName = localStorage.getItem('vpnUserName');
+      const subscribeUrl = localStorage.getItem('vpnSubscribeUrl');
+      
+      if (userId && userName && subscribeUrl) {
+        currentUser = {
+          userId,
+          userName,
+          subscribeUrl
+        };
+        
+        document.getElementById('user-id').textContent = userId;
+        document.getElementById('user-name').textContent = userName;
+        document.getElementById('subscribe-url').textContent = subscribeUrl;
+        
+        document.getElementById('register-section').classList.add('hidden');
+        document.getElementById('user-section').classList.remove('hidden');
+      }
+    }
+
+    loadStats();
+    loadSavedUser();
+    setInterval(loadStats, 60000);
+  </script>
+</body>
+</html>
