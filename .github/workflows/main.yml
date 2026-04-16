@@ -1,0 +1,15 @@
+name: Keep NapCat Alive
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"  # 每 12 小时执行一次
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping HF Space
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://flyminos-qq.hf.space)
+          echo "HTTP Status: $STATUS"
