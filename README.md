@@ -1,219 +1,150 @@
-# Netlify VPN转发服务
+# Cloud Mail Android App
 
-一个部署在Netlify上的VPN转发服务，自动生成Clash配置文件，导入本地Clash客户端即可使用。
+这是一个支持 Cloud Mail API 的 Android 应用，提供邮件管理和用户管理功能。
 
 ## 功能特性
 
-- 🚀 **一键配置** - 注册即可获取Clash配置文件
-- 📥 **下载配置** - 下载yaml配置文件导入Clash
-- 📋 **订阅链接** - 支持Clash订阅链接自动更新
-- 📊 **流量统计** - 实时显示已用/剩余流量
-- 🔄 **自动重置** - 每月1号自动重置流量统计
-- 🎨 **美观后台** - 现代化深色主题管理界面
+- **用户登录**: 使用邮箱和密码生成认证 Token
+- **邮件列表**: 查看收件和发件邮件列表，支持分页和下拉刷新
+- **邮件详情**: 显示邮件主题、发件人、收件人、时间等详细信息
+- **添加用户**: 支持添加新用户账户
+- **模糊搜索**: 支持邮件的模糊匹配搜索
 
-## 部署步骤
+## 技术栈
 
-### 1. Fork或克隆本项目
-
-```bash
-git clone https://github.com/your-username/netlify-vpn-proxy.git
-cd netlify-vpn-proxy
-```
-
-### 2. 安装依赖
-
-```bash
-npm install
-```
-
-### 3. 部署到Netlify
-
-#### 方法一：通过Netlify CLI
-
-```bash
-# 安装Netlify CLI
-npm install -g netlify-cli
-
-# 登录Netlify
-netlify login
-
-# 创建新站点
-netlify init
-
-# 部署
-netlify deploy --prod
-```
-
-#### 方法二：通过GitHub自动部署
-
-1. 将代码推送到GitHub仓库
-2. 登录 [Netlify](https://app.netlify.com)
-3. 点击 "Add new site" → "Import an existing project"
-4. 选择你的GitHub仓库
-5. 构建设置保持默认即可
-6. 点击 "Deploy site"
-
-## 使用方法
-
-### 1. 访问管理后台
-
-部署完成后，访问你的站点URL进入管理后台。
-
-### 2. 注册获取配置
-
-点击"立即注册获取配置"按钮，系统会为你生成专属的Clash配置。
-
-### 3. 下载配置文件
-
-点击"下载配置文件"按钮，将`vpn-config.yaml`保存到本地。
-
-### 4. 导入Clash客户端
-
-打开Clash客户端（Clash for Windows / ClashX / Clash for Android等）：
-- 选择"配置" → "导入配置文件"
-- 选择下载的`vpn-config.yaml`文件
-
-### 5. 开启代理
-
-在Clash中选择导入的代理节点，开启系统代理即可使用。
-
-## 订阅链接
-
-你也可以使用订阅链接在Clash中添加订阅：
-
-1. 复制订阅链接
-2. 在Clash客户端中选择"配置" → "添加订阅"
-3. 粘贴订阅链接并更新
-
-订阅链接格式：
-```
-https://your-site.netlify.app/.netlify/functions/proxy/subscribe?user_id=YOUR_USER_ID
-```
-
-## API接口
-
-### 注册用户
-
-```
-POST /.netlify/functions/proxy/register
-```
-
-响应示例：
-```json
-{
-  "success": true,
-  "userId": "abc123xyz",
-  "userName": "VPN-abc123",
-  "subscribeUrl": "https://your-site.netlify.app/.netlify/functions/proxy/subscribe?user_id=abc123xyz",
-  "configDownloadUrl": "https://your-site.netlify.app/.netlify/functions/proxy/config?user_id=abc123xyz",
-  "clashConfig": "port: 7890\n..."
-}
-```
-
-### 下载配置文件
-
-```
-GET /.netlify/functions/proxy/config?user_id=YOUR_USER_ID
-```
-
-返回YAML格式的Clash配置文件。
-
-### 订阅链接
-
-```
-GET /.netlify/functions/proxy/subscribe?user_id=YOUR_USER_ID
-```
-
-返回Base64编码的配置文件，可用于Clash订阅。
-
-### 获取流量统计
-
-```
-GET /.netlify/functions/admin/stats
-```
-
-响应示例：
-```json
-{
-  "used": 1073741824,
-  "usedFormatted": "1 GB",
-  "remaining": 107374182400,
-  "remainingFormatted": "100 GB",
-  "total": 108447924224,
-  "totalFormatted": "101 GB",
-  "percentage": 0.99,
-  "requests": 150,
-  "resetDate": "2024-02-01T00:00:00.000Z",
-  "resetDateFormatted": "2024年2月1日 00:00",
-  "daysUntilReset": 15
-}
-```
-
-## 生成的Clash配置示例
-
-```yaml
-port: 7890
-socks-port: 7891
-mixed-port: 7892
-allow-lan: true
-mode: rule
-log-level: info
-external-controller: 127.0.0.1:9090
-
-proxies:
-  - name: "VPN-abc123"
-    type: http
-    server: your-site.netlify.app
-    port: 443
-    tls: true
-    headers:
-      X-User-ID: abc123xyz
-
-proxy-groups:
-  - name: "Proxy"
-    type: select
-    proxies:
-      - "VPN-abc123"
-      - DIRECT
-
-rules:
-  - MATCH,Proxy
-```
-
-## 流量说明
-
-- Netlify免费套餐提供 **100GB/月** 的带宽
-- 流量统计每月1号自动重置
-- 当流量用尽时，代理服务将返回 429 错误
-
-## 注意事项
-
-1. **用户ID**：请妥善保管你的用户ID，可用于恢复配置
-2. **流量限制**：注意监控流量使用情况，避免超出免费额度
-3. **合规使用**：请遵守当地法律法规，合法使用本服务
+- **语言**: Kotlin
+- **最低 SDK**: Android 6.0 (API 24)
+- **目标 SDK**: Android 14 (API 34)
+- **架构**: MVVM
+- **网络库**: Retrofit + OkHttp + Gson
+- **异步处理**: Kotlin Coroutines
+- **UI 组件**: RecyclerView, SwipeRefreshLayout, Material Design
 
 ## 项目结构
 
 ```
-netlify-vpn-proxy/
-├── netlify/
-│   └── functions/
-│       ├── proxy.js      # 代理转发核心 + 配置生成
-│       └── admin.js      # 流量统计API
-├── public/
-│   └── index.html        # 管理后台界面
-├── netlify.toml          # Netlify配置
-├── package.json
-└── README.md
+CloudMailApp/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/cloudmail/app/
+│   │   │   ├── api/              # API 接口定义
+│   │   │   │   ├── CloudMailApi.kt
+│   │   │   │   └── RetrofitClient.kt
+│   │   │   ├── model/            # 数据模型
+│   │   │   │   └ Models.kt
+│   │   │   ├── utils/            # 工具类
+│   │   │   │   ├── SharedPreferencesManager.kt
+│   │   │   ├── LoginActivity.kt  # 登录页面
+│   │   │   ├── MainActivity.kt   # 主页面
+│   │   │   ├── AddUserActivity.kt # 添加用户页面
+│   │   │   ├── EmailAdapter.kt   # 邮件列表适配器
+│   │   ├── res/                  # 资源文件
+│   │   ├── AndroidManifest.xml
+│   ├── build.gradle.kts
+│   ├── proguard-rules.pro
+├── gradle/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradle.properties
 ```
 
-## 技术栈
+## Cloud Mail API 接口
 
-- **前端**: 原生HTML/CSS/JavaScript
-- **后端**: Netlify Functions (Node.js)
-- **存储**: Netlify Blobs
-- **HTTP客户端**: node-fetch
+应用集成了以下 Cloud Mail API 接口：
 
-## 许可证
+### 1. 生成 Token
+- **接口**: POST `/api/public/genToken`
+- **用途**: 用户登录认证
+- **参数**: email, password
+- **返回**: token
 
-MIT License
+### 2. 邮件查询
+- **接口**: POST `/api/public/emailList`
+- **用途**: 查询邮件列表
+- **参数**: toEmail, sendName, sendEmail, subject, content, timeSort, type, isDel, num, size
+- **返回**: 邮件列表数据
+
+### 3. 添加用户
+- **接口**: POST `/api/public/addUser`
+- **用途**: 添加新邮箱用户
+- **参数**: list (用户数组)
+- **返回**: 操作结果
+
+## 如何使用
+
+### 1. 配置服务器地址
+在登录页面输入您的 Cloud Mail 服务 Base URL（例如：`https://your-domain.com/`）
+
+### 2. 登录
+输入管理员邮箱和密码进行登录，系统会自动生成并保存 Token
+
+### 3. 查看邮件
+登录成功后会显示邮件列表，支持：
+- 下拉刷新
+- 自动分页加载
+- 显示收件/发件状态
+- 显示邮件详情预览
+
+### 4. 添加用户
+点击右上角"Add User"按钮，输入邮箱地址和可选的密码、角色信息
+
+## 构建和运行
+
+### 环境要求
+- Android Studio Arctic Fox 或更高版本
+- JDK 8 或更高版本
+- Android SDK API 24+
+
+### 构建步骤
+1. 克隆项目到本地
+2. 使用 Android Studio 打开项目
+3. 等待 Gradle 同步完成
+4. 点击 Run 按钮 or 使用命令：
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+### 安装到设备
+```bash
+./gradlew installDebug
+```
+
+## 配置说明
+
+### Retrofit 配置
+在 `RetrofitClient.kt` 中可以修改：
+- Base URL（默认值）
+- 连接超时时间
+- 日志级别
+
+### SharedPreferences
+应用使用 SharedPreferences 存储：
+- 用户 Token
+- 用户邮箱
+- 服务器 Base URL
+
+## 权限要求
+
+应用需要以下权限：
+- `INTERNET`: 网络访问
+- `ACCESS_NETWORK_STATE`: 网络状态检测
+
+## 注意事项
+
+1. **Token 管理**: Token 全局只有一个，重新生成会导致旧的失效
+2. **模糊搜索**: 参数支持 % 符号进行模糊匹配
+   - `'admin'`: 精确匹配
+   - `'admin%'`: 开头匹配
+   - `'%@example.com'`: 结尾匹配
+   - `''%admin%'`: 包含匹配
+
+3. **邮件类型**: type 参数（0=收件，1=发件，空=全部）
+4. **删除状态**: isDel 参数（0=正常，2=删除，空=全部）
+
+## License
+
+本项目仅供学习和参考使用。
+
+## 联系方式
+
+如有问题或建议，请通过 Cloud Mail 官方渠道联系。
