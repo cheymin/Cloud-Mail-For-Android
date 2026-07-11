@@ -29,11 +29,39 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Generate release signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore ${{ github.workspace }}/release.keystore \
+            -alias cloudmail \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass cloudmail123 \
+            -keypass cloudmail123 \
+            -dname "CN=Cloud Mail, OU=Cloud Mail, O=Cloud Mail, L=Beijing, ST=Beijing, C=CN"
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
       - name: Build Release APK
+        env:
+          SIGNING_KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
+          SIGNING_KEYSTORE_PASSWORD: cloudmail123
+          SIGNING_KEY_ALIAS: cloudmail
+          SIGNING_KEY_PASSWORD: cloudmail123
         run: ./gradlew assembleRelease
+
+      - name: Verify APKs
+        run: |
+          ls -la app/build/outputs/apk/debug/
+          ls -la app/build/outputs/apk/release/
+          echo "--- Checking debug APK signature ---"
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk || true
+          echo "--- Checking release APK signature ---"
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk || true
+          fi
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -47,6 +75,12 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/
           if-no-files-found: warn
+
+      - name: Upload keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-keystore
+          path: release.keystore
 
   release:
     name: Publish Release
@@ -72,12 +106,18 @@ jobs:
           name: app-release
           path: artifacts/
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Download keystore
+        uses: actions/download-artifact@v4
+        with:
+          name: release-keystore
+          path: artifacts/
 
       - name: List artifacts
         run: ls -laR artifacts/
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -96,11 +136,17 @@ jobs:
             - 支持模糊搜索邮件
 
             ### 下载说明
-            - `app-debug.apk` - Debug 版本，包含调试日志
-            - `app-release-unsigned.apk` - Release 未签名版本
+            - `app-debug.apk` - Debug 版本（已签名，可直接安装）
+            - `app-release.apk` - Release 正式版（已签名，推荐安装）
+            - `release.keystore` - 签名证书文件
+
+            ### 签名信息
+            - Keystore 密码: `cloudmail123`
+            - Key 别名: `cloudmail`
+            - Key 密码: `cloudmail123`
 
             ### 使用方法
-            1. 下载 APK 文件到 Android 设备
+            1. 下载 `app-release.apk` 到 Android 设备
             2. 允许安装未知来源应用
             3. 安装并打开应用
             4. 输入 Cloud Mail 服务器地址（如 `https://your-domain.com/`）
@@ -109,6 +155,8 @@ jobs:
           prerelease: false
           files: |
             artifacts/app-debug.apk
+            artifacts/app-release.apk
             artifacts/app-release-unsigned.apk
+            artifacts/release.keystore
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
