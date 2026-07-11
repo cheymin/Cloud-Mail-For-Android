@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:cloud_mail_app/services/api_service.dart';
-import 'package:cloud_mail_app/utils/storage.dart';
-import 'package:cloud_mail_app/screens/email_list_screen.dart';
+import '../services/api_service.dart';
+import '../utils/storage.dart';
+import 'email/mailbox_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,103 +12,102 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final _baseUrlController = TextEditingController();
+  final _urlController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
+  bool _loading = false;
   bool _obscurePassword = true;
-  bool _isLoading = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _baseUrlController.text = StorageService.baseUrl ?? '';
-    _emailController.text = StorageService.email ?? '';
-
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+    if (StorageService.baseUrl != null) {
+      _urlController.text = StorageService.baseUrl!;
+    }
+    if (StorageService.email != null) {
+      _emailController.text = StorageService.email!;
+    }
+    _animController = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 800),
     );
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
     );
-    _animationController.forward();
+    _animController.forward();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _baseUrlController.dispose();
+    _urlController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _animController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
     try {
-      final baseUrl = _baseUrlController.text.trim();
+      String baseUrl = _urlController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
       final api = CloudMailApi(baseUrl);
+      final response = await api.genToken(email, password);
 
-      final response = await api.generateToken(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-
-      if (response.code == 200 && response.data != null) {
-        StorageService.token = response.data;
-        StorageService.email = _emailController.text.trim();
+      if (response.isSuccess && response.data != null) {
+        final token = response.data!;
+        StorageService.token = token;
+        StorageService.email = email;
         StorageService.baseUrl = baseUrl;
 
-        // 关键修复：把 token 同步设置给 api 对象，否则后续请求会 401
-        api.token = response.data;
+        api.token = token;
+
+        // 尝试加载账户列表，获取默认账户
+        try {
+          final accResp = await api.getAccountList();
+          if (accResp.isSuccess &&
+              accResp.data != null &&
+              accResp.data!.isNotEmpty) {
+            StorageService.currentAccountId = accResp.data!.first.accountId;
+          }
+        } catch (_) {}
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => EmailListScreen(api: api),
+              builder: (ctx) => MailboxScreen(api: api),
             ),
           );
         }
       } else {
-        if (mounted) {
-          showFunDialog(
-            context,
-            title: '登录失败！',
-            message: response.message.isEmpty
-                ? ErrorMessages.getErrorMessage(Exception('unknown'))
-                : '${response.message}\n\n💡 小提示：检查一下邮箱密码对不对哦~',
-            icon: Icons.lock_outline,
-            iconColor: Colors.red,
-            actionText: '让我再想想',
-          );
-        }
+        throw Exception(response.message);
       }
     } catch (e) {
       if (mounted) {
-        showFunDialog(
-          context,
-          title: '出状况了！',
-          message: ErrorMessages.getErrorMessage(e),
-          icon: Icons.cloud_off,
-          iconColor: Colors.orange,
-          actionText: '好吧我忍了',
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessages.fromException(e)),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: Container(
@@ -117,260 +115,227 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.deepPurple.shade900,
-              Colors.indigo.shade800,
-              Colors.blue.shade900,
-            ],
+            colors: isDark
+                ? [
+                    const Color(0xFF0F172A),
+                    const Color(0xFF1E1B4B),
+                    const Color(0xFF0F172A),
+                  ]
+                : [
+                    const Color(0xFF6C63FF).withOpacity(0.08),
+                    const Color(0xFF8B5CF6).withOpacity(0.05),
+                    const Color(0xFFFF6584).withOpacity(0.05),
+                  ],
           ),
         ),
         child: SafeArea(
           child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 30),
-                  _buildLogo(),
-                  const SizedBox(height: 40),
-                  _buildLoginCard(size),
-                  const SizedBox(height: 30),
-                  _buildFooter(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogo() {
-    return Center(
-      child: Column(
-        children: [
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1.5,
-              ),
-            ),
-            child: const Icon(
-              Icons.email_outlined,
-              size: 48,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Cloud Mail',
-            style: GoogleFonts.poppins(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '✨ 你的云端邮件管家',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoginCard(Size size) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '欢迎回来 👋',
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF1A1A2E),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '登录你的 Cloud Mail 账号',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 28),
-            _buildTextField(
-              controller: _baseUrlController,
-              label: '服务器地址',
-              hint: 'https://your-domain.com/',
-              icon: Icons.cloud_outlined,
-              keyboardType: TextInputType.url,
-              validator: (v) =>
-                  v!.isEmpty ? '服务器地址不能为空哦~' : null,
-            ),
-            const SizedBox(height: 18),
-            _buildTextField(
-              controller: _emailController,
-              label: '管理员邮箱',
-              hint: 'admin@example.com',
-              icon: Icons.person_outline,
-              keyboardType: TextInputType.emailAddress,
-              validator: (v) => v!.isEmpty ? '邮箱是必填的啦~' : null,
-            ),
-            const SizedBox(height: 18),
-            _buildTextField(
-              controller: _passwordController,
-              label: '密码',
-              hint: '••••••••',
-              icon: Icons.lock_outline,
-              obscureText: _obscurePassword,
-              suffixIcon: IconButton(
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  color: Colors.grey,
-                ),
-              ),
-              validator: (v) =>
-                  v!.isEmpty ? '密码可不能是空的哦~' : null,
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        '登 录',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+            opacity: _fadeAnim,
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E293B).withOpacity(0.9)
+                        : Colors.white.withOpacity(0.95),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 30,
+                        offset: const Offset(0, 10),
                       ),
+                    ],
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFF6C63FF),
+                                  Color(0xFF8B5CF6),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(
+                              Icons.mail_outline,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Cloud Mail',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '登录你的邮箱账户',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        TextFormField(
+                          controller: _urlController,
+                          decoration: InputDecoration(
+                            labelText: '服务器地址',
+                            hintText: 'https://your-mail.example.com',
+                            prefixIcon: const Icon(Icons.language, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return '请输入服务器地址';
+                            }
+                            return null;
+                          },
+                          keyboardType: TextInputType.url,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: '邮箱地址',
+                            hintText: 'admin@example.com',
+                            prefixIcon:
+                                const Icon(Icons.email_outlined, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return '请输入邮箱地址';
+                            }
+                            if (!v.contains('@')) {
+                              return '邮箱格式好像不对哦~';
+                            }
+                            return null;
+                          },
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: '密码',
+                            hintText: '输入你的密码',
+                            prefixIcon:
+                                const Icon(Icons.lock_outline, size: 20),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) {
+                              return '密码不能为空';
+                            }
+                            return null;
+                          },
+                          onFieldSubmitted: (_) => _login(),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6C63FF),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: _loading
+                                ? const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text('登录中...'),
+                                    ],
+                                  )
+                                : const Text(
+                                    '登录',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '💡 提示：登录即代表同意相关服务条款',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.grey[500]
+                                : Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF1A1A2E),
           ),
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          validator: validator,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            prefixIcon: Icon(icon, color: const Color(0xFF6C63FF), size: 22),
-            suffixIcon: suffixIcon,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: Colors.red.shade300, width: 1.5),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: Colors.red.shade400, width: 1.5),
-            ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFooter() {
-    return Center(
-      child: Column(
-        children: [
-          Text(
-            'Made with 💜 and too much coffee',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 12,
-            ),
-          ),
-        ],
       ),
     );
   }

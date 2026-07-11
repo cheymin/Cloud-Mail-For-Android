@@ -1,175 +1,157 @@
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
-  static const String _keyToken = 'token';
-  static const String _keyEmail = 'email';
-  static const String _keyBaseUrl = 'base_url';
-
-  static late SharedPreferences _prefs;
+  static SharedPreferences? _prefs;
 
   static Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
+    _prefs ??= await SharedPreferences.getInstance();
   }
 
-  static String? get token => _prefs.getString(_keyToken);
+  static String? get token => _prefs?.getString('token');
   static set token(String? value) {
-    if (value == null) {
-      _prefs.remove(_keyToken);
+    if (value != null) {
+      _prefs?.setString('token', value);
     } else {
-      _prefs.setString(_keyToken, value);
+      _prefs?.remove('token');
     }
   }
 
-  static String? get email => _prefs.getString(_keyEmail);
+  static String? get email => _prefs?.getString('email');
   static set email(String? value) {
-    if (value == null) {
-      _prefs.remove(_keyEmail);
+    if (value != null) {
+      _prefs?.setString('email', value);
     } else {
-      _prefs.setString(_keyEmail, value);
+      _prefs?.remove('email');
     }
   }
 
-  static String? get baseUrl => _prefs.getString(_keyBaseUrl);
+  static String? get baseUrl => _prefs?.getString('baseUrl');
   static set baseUrl(String? value) {
-    if (value == null) {
-      _prefs.remove(_keyBaseUrl);
+    if (value != null) {
+      _prefs?.setString('baseUrl', value);
     } else {
-      _prefs.setString(_keyBaseUrl, value);
+      _prefs?.remove('baseUrl');
     }
+  }
+
+  static int? get currentAccountId => _prefs?.getInt('currentAccountId');
+  static set currentAccountId(int? value) {
+    if (value != null) {
+      _prefs?.setInt('currentAccountId', value);
+    } else {
+      _prefs?.remove('currentAccountId');
+    }
+  }
+
+  static String get themeMode => _prefs?.getString('themeMode') ?? 'system';
+  static set themeMode(String value) {
+    _prefs?.setString('themeMode', value);
+  }
+
+  static bool get showSenderAvatar => _prefs?.getBool('showSenderAvatar') ?? true;
+  static set showSenderAvatar(bool value) {
+    _prefs?.setBool('showSenderAvatar', value);
+  }
+
+  static bool get autoLoadImages => _prefs?.getBool('autoLoadImages') ?? true;
+  static set autoLoadImages(bool value) {
+    _prefs?.setBool('autoLoadImages', value);
   }
 
   static void clear() {
-    _prefs.remove(_keyToken);
-    _prefs.remove(_keyEmail);
+    _prefs?.remove('token');
+    _prefs?.remove('email');
+    _prefs?.remove('currentAccountId');
   }
 }
 
 class ErrorMessages {
-  static const List<String> networkErrors = [
-    '哎呀妈呀！网络它离家出走了！（连接已断开）',
-    '服务器：我不听我不听我不听！（连接关闭）',
-    '啪！网线断了，就像我的心一样碎了。',
-    '网络：今天不想上班，告辞！（连接关闭）',
-    '服务器正在摸鱼中...（连接被关闭）',
-    '信号说：我先撤了啊兄弟！',
-    '啊这... 网络它突然有自己的想法了。',
-    '服务器单方面宣布：连接结束！',
+  static const List<String> connectionErrors = [
+    '哎呀妈呀！网络它离家出走了！',
+    '啪！网线断了，就像我的心一样碎了',
+    '网络：我不干了！',
+    '连接失败？大概是服务器在摸鱼吧',
+    '啊哦，连不上了，要不你重启一下路由器试试？',
+    '网络它有自己的想法，它不想连接',
   ];
 
   static const List<String> timeoutErrors = [
     '等得花儿都谢了，服务器还在化妆...',
-    '服务器：等我再睡五分钟...',
-    '超时警告：服务器可能在刷短视频。',
-    '你的请求在路上迷路了...',
-    '服务器正在沉思人生的意义...',
+    '服务器：等我再睡五分钟',
+    '超时了！服务器是不是去喝咖啡了？',
+    '等了好久好久，结果啥也没等来',
+    '服务器在思考人生，没空理你',
+    '加载中...加载中...加载了个寂寞',
   ];
 
   static const List<String> authErrors = [
-    '密码就像你的初恋，总是记不住的那个才最难忘。',
-    '邮箱或密码错误，建议用脚指头再想想。',
-    '登录失败，是不是偷偷把密码改成生日了？',
-    '认证失败：你可能是个假的管理员。',
-    'Token 失效了，就像过期的零食一样。',
+    '密码就像你的初恋，总是记不住的那个才最难忘',
+    '身份验证失败，你是机器人吗？',
+    '登不进去？想想是不是密码大小写搞反了',
+    'Token 已过期，就像牛奶一样，过期了就得换',
+    '权限不足？是不是管理员把你拉黑了',
+    '登录失败，可能是因为你长得太帅了系统不敢认',
   ];
 
   static const List<String> serverErrors = [
-    '服务器：我裂开了。（内部错误）',
-    '500 错误：服务器今天心情不好。',
+    '服务器：我裂开了。',
     '后端小哥：这不是我写的 bug！',
-    '服务器已崩溃，正在墙角画圈圈。',
-    '出大事了！服务器它... 它... 它累了。',
+    '500 错误，服务器它疯了',
+    '服务器内部错误，建议给它放个假',
+    '出了点问题，具体啥问题服务器也说不清楚',
+    '服务器：今天不想干活，别烦我',
   ];
 
   static const List<String> unknownErrors = [
     '出了点问题，具体啥问题我也不知道...',
-    '未知错误：可能是你的人品问题。',
-    '发生了一些奇怪的事情...',
-    '程序：我是谁？我在哪？我在干啥？',
-    'Bug 它来了，它带着错误走来了。',
+    'Bug 它来了，它带着错误走来了',
+    '发生了一件不可思议的事情',
+    '未知错误，可能是玄学问题',
+    '程序它有自己的想法',
+    '这个错误太神秘了，我都看不懂',
   ];
 
-  static String getErrorMessage(Object error) {
-    final msg = error.toString().toLowerCase();
+  static String getConnection() {
+    return (connectionErrors..shuffle()).first;
+  }
 
-    if (msg.contains('connection closed') ||
-        msg.contains('connection reset') ||
-        msg.contains('errno = -104') ||
-        msg.contains('broken pipe') ||
-        msg.contains('socket')) {
-      return networkErrors[
-          DateTime.now().millisecondsSinceEpoch % networkErrors.length];
+  static String getTimeout() {
+    return (timeoutErrors..shuffle()).first;
+  }
+
+  static String getAuth() {
+    return (authErrors..shuffle()).first;
+  }
+
+  static String getServer() {
+    return (serverErrors..shuffle()).first;
+  }
+
+  static String getUnknown() {
+    return (unknownErrors..shuffle()).first;
+  }
+
+  static String fromException(dynamic e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('connection') ||
+        msg.contains('socket') ||
+        msg.contains('network') ||
+        msg.contains('connection refused') ||
+        msg.contains('connection closed')) {
+      return getConnection();
     }
-
     if (msg.contains('timeout') || msg.contains('timed out')) {
-      return timeoutErrors[
-          DateTime.now().millisecondsSinceEpoch % timeoutErrors.length];
+      return getTimeout();
     }
-
     if (msg.contains('401') ||
         msg.contains('unauthorized') ||
-        msg.contains('token')) {
-      return authErrors[
-          DateTime.now().millisecondsSinceEpoch % authErrors.length];
+        msg.contains('forbidden') ||
+        msg.contains('403')) {
+      return getAuth();
     }
-
-    if (msg.contains('500') || msg.contains('502') || msg.contains('503')) {
-      return serverErrors[
-          DateTime.now().millisecondsSinceEpoch % serverErrors.length];
+    if (msg.contains('500') || msg.contains('internal server')) {
+      return getServer();
     }
-
-    if (msg.contains('socketexception') || msg.contains('no internet')) {
-      return networkErrors[
-          DateTime.now().millisecondsSinceEpoch % networkErrors.length];
-    }
-
-    return unknownErrors[
-        DateTime.now().millisecondsSinceEpoch % unknownErrors.length];
+    return '${getUnknown()}\n\n原始错误：${e.toString()}';
   }
-}
-
-Future<void> showFunDialog(
-  BuildContext context, {
-  required String title,
-  required String message,
-  IconData icon = Icons.sentiment_dissatisfied,
-  Color iconColor = Colors.orange,
-  String actionText = '我知道了',
-  VoidCallback? onAction,
-}) {
-  return showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Column(
-        children: [
-          Icon(icon, size: 60, color: iconColor),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
-      content: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 15, height: 1.5),
-      ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            onAction?.call();
-          },
-          style: TextButton.styleFrom(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Text(actionText),
-        ),
-      ],
-    ),
-  );
 }

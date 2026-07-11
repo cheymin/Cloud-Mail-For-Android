@@ -1,45 +1,126 @@
 class Email {
   final int emailId;
-  final String? sendEmail;
-  final String? sendName;
-  final String? subject;
-  final String? toEmail;
-  final String? toName;
-  final String? createTime;
+  final String sendEmail;
+  final String sendName;
+  final String subject;
+  final String toEmail;
+  final String toName;
+  final String createTime;
   final int type;
-  final String? content;
-  final String? text;
+  final String content;
+  final String text;
   final int isDel;
+  final int isStar;
+  final int status;
+  final String? messageId;
+  final List<Attachment>? attList;
 
   Email({
     required this.emailId,
-    this.sendEmail,
-    this.sendName,
-    this.subject,
-    this.toEmail,
-    this.toName,
-    this.createTime,
+    required this.sendEmail,
+    required this.sendName,
+    required this.subject,
+    required this.toEmail,
+    required this.toName,
+    required this.createTime,
     required this.type,
-    this.content,
-    this.text,
+    required this.content,
+    required this.text,
     required this.isDel,
+    this.isStar = 0,
+    this.status = 0,
+    this.messageId,
+    this.attList,
   });
 
   factory Email.fromJson(Map<String, dynamic> json) {
     return Email(
       emailId: json['emailId'] ?? 0,
-      sendEmail: json['sendEmail'],
-      sendName: json['sendName'],
-      subject: json['subject'],
-      toEmail: json['toEmail'],
-      toName: json['toName'],
-      createTime: json['createTime'],
+      sendEmail: json['sendEmail'] ?? '',
+      sendName: json['sendName'] ?? json['name'] ?? '',
+      subject: json['subject'] ?? '(无主题)',
+      toEmail: json['toEmail'] ?? '',
+      toName: json['toName'] ?? '',
+      createTime: json['createTime'] ?? '',
       type: json['type'] ?? 0,
-      content: json['content'],
-      text: json['text'],
+      content: json['content'] ?? '',
+      text: json['text'] ?? '',
       isDel: json['isDel'] ?? 0,
+      isStar: json['isStar'] ?? (json['starId'] != null ? 1 : 0),
+      status: json['status'] ?? 0,
+      messageId: json['messageId'],
+      attList: json['attList'] != null
+          ? (json['attList'] as List)
+              .map((e) => Attachment.fromJson(e))
+              .toList()
+          : null,
     );
   }
+
+  bool get isReceived => type == 0;
+  bool get isSent => type == 1;
+  bool get isStarred => isStar == 1;
+  bool get isDeleted => isDel == 1 || isDel == 2;
+}
+
+class Attachment {
+  final int attId;
+  final String fileName;
+  final String fileSize;
+  final String contentType;
+  final String? contentId;
+  final String? url;
+
+  Attachment({
+    required this.attId,
+    required this.fileName,
+    required this.fileSize,
+    required this.contentType,
+    this.contentId,
+    this.url,
+  });
+
+  factory Attachment.fromJson(Map<String, dynamic> json) {
+    return Attachment(
+      attId: json['attId'] ?? 0,
+      fileName: json['fileName'] ?? json['filename'] ?? '未命名',
+      fileSize: json['fileSize']?.toString() ?? '0',
+      contentType: json['contentType'] ?? json['type'] ?? 'application/octet-stream',
+      contentId: json['contentId'],
+      url: json['url'],
+    );
+  }
+}
+
+class Account {
+  final int accountId;
+  final String email;
+  final String name;
+  final int userId;
+  final int isTop;
+  final int allReceive;
+
+  Account({
+    required this.accountId,
+    required this.email,
+    required this.name,
+    required this.userId,
+    this.isTop = 0,
+    this.allReceive = 0,
+  });
+
+  factory Account.fromJson(Map<String, dynamic> json) {
+    return Account(
+      accountId: json['accountId'] ?? 0,
+      email: json['email'] ?? '',
+      name: json['name'] ?? '',
+      userId: json['userId'] ?? 0,
+      isTop: json['isTop'] ?? 0,
+      allReceive: json['allReceive'] ?? 0,
+    );
+  }
+
+  String get displayName => name.isNotEmpty ? name : email.split('@').first;
 }
 
 class ApiResponse<T> {
@@ -53,33 +134,25 @@ class ApiResponse<T> {
     this.data,
   });
 
-  factory ApiResponse.fromJson(
-      Map<String, dynamic> json, T Function(dynamic)? dataParser) {
+  bool get isSuccess => code == 200;
+
+  factory ApiResponse.fromJson(Map<String, dynamic> json, T Function(dynamic)? dataParser) {
     return ApiResponse<T>(
       code: json['code'] ?? 0,
       message: json['message'] ?? '',
-      data: json['data'] != null && dataParser != null
-          ? dataParser(json['data'])
-          : json['data'],
+      data: json['data'] != null && dataParser != null ? dataParser(json['data']) : null,
     );
   }
 }
 
-class UserInfo {
-  final String email;
-  final String? password;
-  final String? roleName;
+class EmailListResult {
+  final List<Email> list;
+  final int total;
+  final Email? latestEmail;
 
-  UserInfo({
-    required this.email,
-    this.password,
-    this.roleName,
+  EmailListResult({
+    required this.list,
+    required this.total,
+    this.latestEmail,
   });
-
-  Map<String, dynamic> toJson() {
-    final map = <String, dynamic>{'email': email};
-    if (password != null) map['password'] = password;
-    if (roleName != null) map['roleName'] = roleName;
-    return map;
-  }
 }
