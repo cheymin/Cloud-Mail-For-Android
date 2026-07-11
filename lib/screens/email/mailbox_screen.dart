@@ -399,6 +399,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   Widget _buildDrawer(bool isDark) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return Drawer(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
