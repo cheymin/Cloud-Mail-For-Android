@@ -28,24 +28,38 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   bool _isStarred = false;
   bool _loading = false;
 
-  // 邮件正文字号倍率，用户可通过双指捏合调整
-  // 1.0 = 默认大小，0.7~2.5 是合理范围
+  // 邮件正文缩放倍率（InteractiveViewer），双指自由缩放整个内容
   double _contentScale = 1.0;
-  // 手势起始时的字号倍率，用于在 onScaleUpdate 中累积计算
-  double _baseScaleAtGestureStart = 1.0;
-  static const double _minScale = 0.7;
-  static const double _maxScale = 2.5;
+  // InteractiveViewer 的变换控制器，用于菜单按钮缩放
+  late final TransformationController _transformController;
+  static const double _minScale = 0.5;
+  static const double _maxScale = 5.0;
 
   @override
   void initState() {
     super.initState();
     _email = widget.email;
     _isStarred = _email.isStarred;
+    _transformController = TransformationController();
   }
 
   @override
   void dispose() {
+    _transformController.dispose();
     super.dispose();
+  }
+
+  /// 菜单按钮缩放
+  void _zoomBy(double factor) {
+    final newScale = (_contentScale * factor).clamp(_minScale, _maxScale);
+    if (newScale == _contentScale) return;
+    setState(() => _contentScale = newScale);
+    _transformController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
+  }
+
+  void _zoomReset() {
+    setState(() => _contentScale = 1.0);
+    _transformController.value = Matrix4.identity();
   }
 
   /// 把邮件正文（含纯文本）拷贝到剪贴板
@@ -223,19 +237,13 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                           _copyEmailContent();
                           break;
                         case 'zoom_in':
-                          setState(() {
-                            _contentScale =
-                                (_contentScale + 0.2).clamp(_minScale, _maxScale);
-                          });
+                          _zoomBy(1.2);
                           break;
                         case 'zoom_out':
-                          setState(() {
-                            _contentScale =
-                                (_contentScale - 0.2).clamp(_minScale, _maxScale);
-                          });
+                          _zoomBy(1 / 1.2);
                           break;
                         case 'zoom_reset':
-                          setState(() => _contentScale = 1.0);
+                          _zoomReset();
                           break;
                       }
                     },
@@ -608,7 +616,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       );
     }
 
-    // 字号倍率提示条（仅当用户调整过时显示）
+    // 缩放提示条（仅当用户调整过时显示）
     final scaleIndicator = _contentScale != 1.0
         ? Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -622,7 +630,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    '字号 ${(_contentScale * 100).round()}%',
+                    '缩放 ${(_contentScale * 100).round()}%',
                     style: TextStyle(
                       fontSize: 11,
                       color: cs.primary,
@@ -645,59 +653,52 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
           )
         : const SizedBox.shrink();
 
-    if (hasHtml) {
-      // 用 GestureDetector 监听双指捏合，更新 _contentScale
-      // 这样文字会以新字号 reflow，比 InteractiveViewer 视觉缩放更适合阅读
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          scaleIndicator,
-          GestureDetector(
-            onScaleUpdate: (details) {
-              // details.scale 是相对本次手势起始的倍率
-              // 累积到 _contentScale 上，并限制范围
-              if ((details.scale - 1.0).abs() > 0.01) {
-                final newScale =
-                    (_baseScaleAtGestureStart * details.scale)
-                        .clamp(_minScale, _maxScale);
-                if ((newScale - _contentScale).abs() > 0.02) {
-                  setState(() => _contentScale = newScale);
-                }
-              }
-            },
-            onScaleStart: (_) {
-              _baseScaleAtGestureStart = _contentScale;
-            },
-            child: HtmlWidget(
-              content,
-              onTapUrl: (url) async {
-                final uri = Uri.parse(url);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-                return true;
-              },
-              textStyle: TextStyle(
-                fontSize: 15 * _contentScale,
-                height: 1.6,
-                color: cs.onSurface,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
+    // InteractiveViewer：双指自由缩放整个内容（像浏览器看 HTML 一样）
+    // SelectionArea：长按文字弹出系统级 复制/分享/全选 菜单
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         scaleIndicator,
-        SelectableText(
-          content,
-          style: TextStyle(
-            fontSize: 15 * _contentScale,
-            height: 1.6,
-            color: cs.onSurface,
+        InteractiveViewer(
+          transformationController: _transformController,
+          minScale: _minScale,
+          maxScale: _maxScale,
+          // 限制缩放后内容不超出边界，允许横向滚动查看宽内容
+          constrained: false,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          onInteractionEnd: (details) {
+            // 同步当前缩放倍率到状态，用于显示提示条
+            final scale = _transformController.value.getMaxScaleOnAxis();
+            if ((scale - _contentScale).abs() > 0.01) {
+              setState(() => _contentScale = scale);
+            }
+          },
+          child: SelectionArea(
+            child: hasHtml
+                ? HtmlWidget(
+                    content,
+                    onTapUrl: (url) async {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(
+                            uri, mode: LaunchMode.externalApplication);
+                      }
+                      return true;
+                    },
+                    textStyle: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: cs.onSurface,
+                    ),
+                  )
+                : Text(
+                    content,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: cs.onSurface,
+                    ),
+                  ),
           ),
         ),
       ],
