@@ -33,17 +33,17 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Generate release signing key
+      - name: Decode release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          keytool -genkeypair -v \
-            -keystore ${{ github.workspace }}/android/app/release.keystore \
-            -alias cloudmail \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass cloudmail123 \
-            -keypass cloudmail123 \
-            -dname "CN=Cloud Mail, OU=Cloud Mail, O=Cloud Mail, L=Beijing, ST=Beijing, C=CN"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/android/app/release.keystore
+            echo "Using keystore from GitHub Secrets"
+          else
+            echo "No keystore secret found, using default embedded keystore"
+            echo "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" | base64 -d > ${{ github.workspace }}/android/app/release.keystore
+          fi
 
       - name: Build Debug APK
         run: flutter build apk --debug
