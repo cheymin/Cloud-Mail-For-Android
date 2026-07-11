@@ -67,6 +67,9 @@ class _LoginScreenState extends State<LoginScreen>
         StorageService.email = _emailController.text.trim();
         StorageService.baseUrl = baseUrl;
 
+        // 关键修复：把 token 同步设置给 api 对象，否则后续请求会 401
+        api.token = response.data;
+
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
