@@ -1,0 +1,37 @@
+name: cloud_mail_app
+description: Cloud Mail 客户端 - 基于 Cloud Mail API 的现代化邮件管理应用
+publish_to: 'none'
+version: 4.0.0+14
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  http: ^1.1.0
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  intl: ^0.18.1
+  flutter_svg: ^2.0.9
+  google_fonts: ^4.0.4
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.1
+  pull_to_refresh: ^2.0.0
+  flutter_widget_from_html_core: ^0.14.11
+  url_launcher: ^6.2.4
+  image_picker: ^1.0.7
+  file_picker: ^6.1.1
+  path_provider: ^2.1.2
+  open_file: ^3.3.2
+  uuid: ^4.3.3
+  dio: ^5.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

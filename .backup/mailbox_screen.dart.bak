@@ -18,9 +18,7 @@ class MailboxScreen extends StatefulWidget {
   State<MailboxScreen> createState() => _MailboxScreenState();
 }
 
-/// 邮件文件夹
-/// - [all] 跨账户的全部邮件（用 allReceive=1 拉取，所有账户收到的邮件）
-enum MailFolder { all, inbox, sent, starred, trash }
+enum MailFolder { inbox, sent, starred, trash }
 
 class _MailboxScreenState extends State<MailboxScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -34,9 +32,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
   String _searchQuery = '';
-
-  // 是否正在后台静默刷新（缓存已显示，正在拉新数据）
-  bool _silentRefreshing = false;
 
   @override
   void initState() {
@@ -86,20 +81,19 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   int get _emailType {
     switch (_currentFolder) {
-      case MailFolder.all:
       case MailFolder.inbox:
-      case MailFolder.starred:
-      case MailFolder.trash:
         return 0;
       case MailFolder.sent:
         return 1;
+      case MailFolder.starred:
+        return 0;
+      case MailFolder.trash:
+        return 0;
     }
   }
 
   String get _folderTitle {
     switch (_currentFolder) {
-      case MailFolder.all:
-        return '全部邮件';
       case MailFolder.inbox:
         return '收件箱';
       case MailFolder.sent:
@@ -110,20 +104,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
         return '垃圾箱';
     }
   }
-
-  /// 当前文件夹用于缓存的 key
-  String get _cacheKey => _currentFolder.name;
-
-  /// 「全部邮件」文件夹不绑定具体账户，跨账户汇总所有收到邮件
-  bool get _isAllFolder => _currentFolder == MailFolder.all;
-
-  /// 加载邮件时是否使用 allReceive=1
-  int? get _allReceive => _isAllFolder ? 1 : null;
-
-  /// 当前文件夹加载邮件时使用的 accountId
-  /// 「全部邮件」不传 accountId
-  int? get _queryAccountId =>
-      _isAllFolder ? null : StorageService.currentAccountId;
 
   String _formatTime(String timeStr) {
     try {
@@ -161,83 +141,52 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   Future<void> _loadEmails() async {
-    // 1. 优先读缓存：如果有缓存，立刻渲染，并标记为"静默刷新中"
-    final cached = StorageService.getMailCache(_cacheKey, _queryAccountId);
-    final hasCache = cached != null && cached.isNotEmpty;
-    if (hasCache) {
-      setState(() {
-        _emails = cached.map((e) => Email.fromJson(e)).toList();
-        _loading = false;
-        _silentRefreshing = true;
-        _hasMore = _emails.length >= 20;
-        if (_emails.isNotEmpty) {
-          _lastEmailId = _emails.last.emailId;
-        }
-      });
-    } else {
-      setState(() {
-        _loading = true;
-        _emails = [];
-        _lastEmailId = null;
-        _hasMore = true;
-      });
-    }
+    setState(() {
+      _loading = true;
+      _emails = [];
+      _lastEmailId = null;
+      _hasMore = true;
+    });
 
     try {
       if (_currentFolder == MailFolder.starred) {
         final response = await widget.api.getStarList(size: 20);
         if (response.isSuccess && response.data != null) {
-          final fresh = response.data!;
           setState(() {
-            _emails = fresh;
-            _hasMore = fresh.length >= 20;
-            if (fresh.isNotEmpty) {
-              _lastEmailId = fresh.last.emailId;
+            _emails = response.data!;
+            _hasMore = response.data!.length >= 20;
+            if (response.data!.isNotEmpty) {
+              _lastEmailId = response.data!.last.emailId;
             }
           });
         }
       } else {
         final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
-          accountId: _queryAccountId,
+          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
           timeSort: 0,
           isDel: isDel,
-          allReceive: _allReceive,
         );
         if (response.isSuccess && response.data != null) {
-          final fresh = response.data!.list;
           setState(() {
-            _emails = fresh;
-            _hasMore = fresh.length >= 20;
-            if (fresh.isNotEmpty) {
-              _lastEmailId = fresh.last.emailId;
+            _emails = response.data!.list;
+            _hasMore = _emails.length >= 20;
+            if (_emails.isNotEmpty) {
+              _lastEmailId = _emails.last.emailId;
             }
           });
-          // 写入缓存
-          StorageService.setMailCache(
-            _cacheKey,
-            _queryAccountId,
-            fresh.map((e) => e.toJson()).toList(),
-          );
         }
       }
     } catch (e) {
-      if (mounted && !hasCache) {
-        // 没缓存时报错给用户看
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(ErrorMessages.fromException(e))),
         );
       }
-      // 有缓存时静默失败，不打扰用户
     } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _silentRefreshing = false;
-        });
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -263,13 +212,12 @@ class _MailboxScreenState extends State<MailboxScreen> {
       } else {
         final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
-          accountId: _queryAccountId,
+          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
           emailId: _lastEmailId,
           timeSort: 0,
           isDel: isDel,
-          allReceive: _allReceive,
         );
         if (response.isSuccess && response.data != null) {
           setState(() {
@@ -406,7 +354,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isGoogle = themeProvider.isGoogle;
 
@@ -419,35 +366,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
             isGoogle
                 ? _buildGoogleAppBar(isDark)
                 : _buildAppleAppBar(isDark),
-            // 静默刷新指示条：缓存已显示，正在拉取最新数据
-            if (_silentRefreshing)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                color: cs.primaryContainer.withOpacity(0.4),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.8,
-                        valueColor:
-                            AlwaysStoppedAnimation(cs.primary),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      '正在获取最新邮件…',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onPrimaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             Expanded(
               child: _loading
                   ? _buildLoadingList(isGoogle)
@@ -1102,11 +1020,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                 children: [
                   _buildSectionLabel('邮箱'),
                   _buildDrawerItem(
-                    icon: Icons.all_inbox_outlined,
-                    title: '全部邮件',
-                    folder: MailFolder.all,
-                  ),
-                  _buildDrawerItem(
                     icon: Icons.inbox_outlined,
                     title: '收件箱',
                     folder: MailFolder.inbox,
@@ -1324,10 +1237,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     IconData icon;
     String text;
     switch (_currentFolder) {
-      case MailFolder.all:
-        icon = Icons.all_inbox_outlined;
-        text = '还没有任何邮件';
-        break;
       case MailFolder.inbox:
         icon = Icons.inbox_outlined;
         text = '收件箱为空';

@@ -162,17 +162,11 @@ ${email.text.isNotEmpty ? email.text : email.content.replaceAll(RegExp(r'<[^>]*>
     ]);
   }
 
-  /// 与邮箱对话
-  ///
-  /// [onStep] 用于回传"思考过程"反馈，UI 层把它实时显示给用户。
-  /// 回调参数是给用户看的简短中文提示。
   Future<String> chatWithMailbox(
     List<Email> emails,
     String userMessage, {
     CloudMailApi? api,
-    void Function(String step)? onStep,
   }) async {
-    onStep?.call('正在整理最近的邮件…');
     final emailListStr = emails.take(10).map((e) {
       final content = e.text.isNotEmpty
           ? e.text.substring(0, e.text.length > 200 ? 200 : e.text.length)
@@ -211,7 +205,6 @@ $emailListStr
 
 请直接给出工具调用或回答，不需要额外解释。''';
 
-    onStep?.call('正在思考你的请求…');
     final response = await _callChatCompletion([
       {'role': 'system', 'content': systemPrompt},
       {'role': 'user', 'content': userMessage},
@@ -228,34 +221,14 @@ $emailListStr
           final params = action['params'];
 
           if (actionName != null && params != null) {
-            onStep?.call('正在执行操作：${_actionLabel(actionName)}');
             final result = await _executeAction(actionName, params, api);
-            onStep?.call('已完成');
-            return '已执行操作: ${_actionLabel(actionName)}\n结果: $result';
+            return '已执行操作: $actionName\n结果: $result';
           }
         }
       } catch (_) {}
     }
 
-    onStep?.call('已完成');
     return response;
-  }
-
-  String _actionLabel(String action) {
-    switch (action) {
-      case 'reply_email':
-        return '回复邮件';
-      case 'forward_email':
-        return '转发邮件';
-      case 'delete_email':
-        return '删除邮件';
-      case 'star_email':
-        return '标星邮件';
-      case 'send_email':
-        return '发送邮件';
-      default:
-        return action;
-    }
   }
 
   Future<String> _executeAction(

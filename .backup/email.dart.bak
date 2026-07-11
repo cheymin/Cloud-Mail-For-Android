@@ -61,25 +61,6 @@ class Email {
   bool get isSent => type == 1;
   bool get isStarred => isStar == 1;
   bool get isDeleted => isDel == 1 || isDel == 2;
-
-  /// 序列化为 JSON，用于本地缓存
-  Map<String, dynamic> toJson() => {
-        'emailId': emailId,
-        'sendEmail': sendEmail,
-        'sendName': sendName,
-        'subject': subject,
-        'toEmail': toEmail,
-        'toName': toName,
-        'createTime': createTime,
-        'type': type,
-        'content': content,
-        'text': text,
-        'isDel': isDel,
-        'isStar': isStar,
-        'status': status,
-        'messageId': messageId,
-        'attList': attList?.map((a) => a.toJson()).toList(),
-      };
 }
 
 class Attachment {
@@ -109,15 +90,6 @@ class Attachment {
       url: json['url'],
     );
   }
-
-  Map<String, dynamic> toJson() => {
-        'attId': attId,
-        'fileName': fileName,
-        'fileSize': fileSize,
-        'contentType': contentType,
-        'contentId': contentId,
-        'url': url,
-      };
 }
 
 class Account {

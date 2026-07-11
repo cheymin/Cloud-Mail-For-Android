@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -28,41 +27,11 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   bool _isStarred = false;
   bool _loading = false;
 
-  // 邮件正文字号倍率，用户可通过双指捏合调整
-  // 1.0 = 默认大小，0.7~2.5 是合理范围
-  double _contentScale = 1.0;
-  // 手势起始时的字号倍率，用于在 onScaleUpdate 中累积计算
-  double _baseScaleAtGestureStart = 1.0;
-  static const double _minScale = 0.7;
-  static const double _maxScale = 2.5;
-
   @override
   void initState() {
     super.initState();
     _email = widget.email;
     _isStarred = _email.isStarred;
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  /// 把邮件正文（含纯文本）拷贝到剪贴板
-  Future<void> _copyEmailContent() async {
-    final plain = _email.text.isNotEmpty
-        ? _email.text
-        : _email.content.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-    final header = '主题: ${_email.subject}\n'
-        '发件人: ${_email.sendName} <${_email.sendEmail}>\n'
-        '收件人: ${_email.toName} <${_email.toEmail}>\n'
-        '时间: ${_email.createTime}\n\n';
-    await Clipboard.setData(ClipboardData(text: '$header$plain'));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('邮件内容已复制')),
-      );
-    }
   }
 
   String _formatTime(String timeStr) {
@@ -215,64 +184,9 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                   ),
                   PopupMenuButton<String>(
                     onSelected: (value) {
-                      switch (value) {
-                        case 'delete':
-                          _deleteEmail();
-                          break;
-                        case 'copy':
-                          _copyEmailContent();
-                          break;
-                        case 'zoom_in':
-                          setState(() {
-                            _contentScale =
-                                (_contentScale + 0.2).clamp(_minScale, _maxScale);
-                          });
-                          break;
-                        case 'zoom_out':
-                          setState(() {
-                            _contentScale =
-                                (_contentScale - 0.2).clamp(_minScale, _maxScale);
-                          });
-                          break;
-                        case 'zoom_reset':
-                          setState(() => _contentScale = 1.0);
-                          break;
-                      }
+                      if (value == 'delete') _deleteEmail();
                     },
                     itemBuilder: (ctx) => [
-                      const PopupMenuItem(
-                        value: 'copy',
-                        child: Row(children: [
-                          Icon(Icons.copy_all_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('复制邮件内容'),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: 'zoom_in',
-                        child: Row(children: [
-                          Icon(Icons.zoom_in_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('放大正文'),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: 'zoom_out',
-                        child: Row(children: [
-                          Icon(Icons.zoom_out_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('缩小正文'),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: 'zoom_reset',
-                        child: Row(children: [
-                          Icon(Icons.restart_alt_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('恢复默认大小'),
-                        ]),
-                      ),
-                      const PopupMenuDivider(),
                       const PopupMenuItem(
                         value: 'delete',
                         child: Row(children: [
@@ -608,99 +522,31 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       );
     }
 
-    // 字号倍率提示条（仅当用户调整过时显示）
-    final scaleIndicator = _contentScale != 1.0
-        ? Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '字号 ${(_contentScale * 100).round()}%',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () => setState(() => _contentScale = 1.0),
-                  icon: const Icon(Icons.restart_alt, size: 14),
-                  label: const Text('恢复', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                ),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
-
     if (hasHtml) {
-      // 用 GestureDetector 监听双指捏合，更新 _contentScale
-      // 这样文字会以新字号 reflow，比 InteractiveViewer 视觉缩放更适合阅读
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          scaleIndicator,
-          GestureDetector(
-            onScaleUpdate: (details) {
-              // details.scale 是相对本次手势起始的倍率
-              // 累积到 _contentScale 上，并限制范围
-              if ((details.scale - 1.0).abs() > 0.01) {
-                final newScale =
-                    (_baseScaleAtGestureStart * details.scale)
-                        .clamp(_minScale, _maxScale);
-                if ((newScale - _contentScale).abs() > 0.02) {
-                  setState(() => _contentScale = newScale);
-                }
-              }
-            },
-            onScaleStart: (_) {
-              _baseScaleAtGestureStart = _contentScale;
-            },
-            child: HtmlWidget(
-              content,
-              onTapUrl: (url) async {
-                final uri = Uri.parse(url);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-                return true;
-              },
-              textStyle: TextStyle(
-                fontSize: 15 * _contentScale,
-                height: 1.6,
-                color: cs.onSurface,
-              ),
-            ),
-          ),
-        ],
+      return HtmlWidget(
+        content,
+        onTapUrl: (url) async {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+          return true;
+        },
+        textStyle: TextStyle(
+          fontSize: 15,
+          height: 1.6,
+          color: cs.onSurface,
+        ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        scaleIndicator,
-        SelectableText(
-          content,
-          style: TextStyle(
-            fontSize: 15 * _contentScale,
-            height: 1.6,
-            color: cs.onSurface,
-          ),
-        ),
-      ],
+    return SelectableText(
+      content,
+      style: TextStyle(
+        fontSize: 15,
+        height: 1.6,
+        color: cs.onSurface,
+      ),
     );
   }
 
