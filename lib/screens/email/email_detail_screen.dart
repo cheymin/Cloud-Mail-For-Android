@@ -623,103 +623,57 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       );
     }
 
-    // 缩放提示条（仅当用户调整过时显示）
-    final scaleIndicator = _contentScale != 1.0
-        ? Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '缩放 ${(_contentScale * 100).round()}%',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () => setState(() => _contentScale = 1.0),
-                  icon: const Icon(Icons.restart_alt, size: 14),
-                  label: const Text('恢复', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                ),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
-
-    // InteractiveViewer：双指自由缩放整个内容（像浏览器看 HTML 一样）
+    // InteractiveViewer：仅双指捏合缩放，单指拖动交给 ListView 滚动
+    // - panEnabled: false → 单指无法拖动内容（不会"划到太平洋"）
+    // - scaleEnabled: true → 双指可自由缩放
+    // - boundaryMargin: zero → 缩放后内容不偏移
     // SelectionArea：长按文字弹出系统级 复制/分享/全选 菜单
-    // 关键参数说明：
-    //  - boundaryMargin 用有限值，避免内容被拖到"太平洋"（无限远）
-    //  - alignment topCenter，缩放时以顶部为锚点，更自然
-    //  - constrained true（默认），内容宽度适配屏幕，缩小时不留白
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        scaleIndicator,
-        Container(
-          width: double.infinity,
-          // ClipRect 防止缩放后内容溢出到其他区域
-          child: ClipRect(
-            child: InteractiveViewer(
-              transformationController: _transformController,
-              minScale: _minScale,
-              maxScale: _maxScale,
-              // 有限的边界 margin：允许放大后平移查看，但不会拖到屏幕外太远
-              boundaryMargin: const EdgeInsets.all(40),
-              alignment: Alignment.topCenter,
-              // 限制缩放手势的灵敏度，避免误判为滑动
-              interactionEndFrictionCoefficient: 0.05,
-              onInteractionEnd: (details) {
-                final scale = _transformController.value.getMaxScaleOnAxis();
-                if ((scale - _contentScale).abs() > 0.01) {
-                  setState(() => _contentScale = scale);
-                }
-              },
-              child: hasHtml
-                  ? SelectionArea(
-                      child: HtmlWidget(
-                        content,
-                        onTapUrl: (url) async {
-                          final uri = Uri.parse(url);
-                          try {
-                            await launchUrl(uri,
-                                mode: LaunchMode.externalApplication);
-                          } catch (_) {}
-                          return true;
-                        },
-                        textStyle: TextStyle(
-                          fontSize: 15,
-                          height: 1.6,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    )
-                  : SelectableText(
-                      content,
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.6,
-                        color: cs.onSurface,
-                      ),
+    return Container(
+      width: double.infinity,
+      child: ClipRect(
+        child: InteractiveViewer(
+          transformationController: _transformController,
+          minScale: _minScale,
+          maxScale: _maxScale,
+          panEnabled: false,
+          scaleEnabled: true,
+          boundaryMargin: EdgeInsets.zero,
+          alignment: Alignment.topCenter,
+          onInteractionEnd: (details) {
+            final scale = _transformController.value.getMaxScaleOnAxis();
+            if ((scale - _contentScale).abs() > 0.01) {
+              _contentScale = scale;
+            }
+          },
+          child: hasHtml
+              ? SelectionArea(
+                  child: HtmlWidget(
+                    content,
+                    onTapUrl: (url) async {
+                      final uri = Uri.parse(url);
+                      try {
+                        await launchUrl(uri,
+                            mode: LaunchMode.externalApplication);
+                      } catch (_) {}
+                      return true;
+                    },
+                    textStyle: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: cs.onSurface,
                     ),
-            ),
-          ),
+                  ),
+                )
+              : SelectableText(
+                  content,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.6,
+                    color: cs.onSurface,
+                  ),
+                ),
         ),
-      ],
+      ),
     );
   }
 
