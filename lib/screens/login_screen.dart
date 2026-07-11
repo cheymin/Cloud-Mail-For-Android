@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../utils/storage.dart';
-import '../utils/theme.dart';
 import 'email/mailbox_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,52 +10,57 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
+  final _pageController = PageController();
   final _urlController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
+  final _urlFormKey = GlobalKey<FormState>();
+  final _accountFormKey = GlobalKey<FormState>();
 
+  int _currentStep = 0;
   bool _loading = false;
   bool _obscurePassword = true;
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
+  bool _rememberLogin = true;
 
   @override
   void initState() {
     super.initState();
-    if (StorageService.baseUrl != null) {
+    if (StorageService.baseUrl != null && StorageService.baseUrl!.isNotEmpty) {
       _urlController.text = StorageService.baseUrl!;
+      // 老用户直接跳到账户登录步骤
+      _currentStep = 2;
     }
     if (StorageService.email != null) {
       _emailController.text = StorageService.email!;
     }
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _animController.forward();
+    _rememberLogin = StorageService.rememberLogin;
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _urlController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _animController.dispose();
     super.dispose();
   }
 
+  void _goToStep(int step) {
+    setState(() => _currentStep = step);
+    _pageController.animateToPage(
+      step,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_accountFormKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
     try {
-      String baseUrl = _urlController.text.trim();
+      final baseUrl = _urlController.text.trim();
       final email = _emailController.text.trim();
       final password = _passwordController.text;
 
@@ -68,10 +72,11 @@ class _LoginScreenState extends State<LoginScreen>
         StorageService.token = token;
         StorageService.email = email;
         StorageService.baseUrl = baseUrl;
+        StorageService.rememberLogin = _rememberLogin;
 
         api.token = token;
 
-        // 尝试加载账户列表，获取默认账户
+        // 加载账户列表，获取默认账户
         try {
           final accResp = await api.getAccountList();
           if (accResp.isSuccess &&
@@ -110,239 +115,354 @@ class _LoginScreenState extends State<LoginScreen>
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 380),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 应用图标（Mimestream 风格的大圆角图标）
-                      Center(
-                        child: Container(
-                          width: 84,
-                          height: 84,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.primary,
-                                Color(0xFF0051D5),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primary.withOpacity(0.3),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.mail_rounded,
-                            color: Colors.white,
-                            size: 42,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // 应用名
-                      Text(
-                        'Cloud Mail',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // 副标题
-                      Text(
-                        '登录你的邮箱账户',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: cs.onSurfaceVariant.withOpacity(0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 36),
-                      // 服务器地址
-                      _buildField(
-                        controller: _urlController,
-                        label: '服务器地址',
-                        hint: 'https://your-mail.example.com',
-                        icon: Icons.language_rounded,
-                        keyboardType: TextInputType.url,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return '请输入服务器地址';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      // 邮箱地址
-                      _buildField(
-                        controller: _emailController,
-                        label: '邮箱地址',
-                        hint: 'admin@example.com',
-                        icon: Icons.alternate_email_rounded,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return '请输入邮箱地址';
-                          }
-                          if (!v.contains('@')) {
-                            return '邮箱格式不正确';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      // 密码
-                      _buildField(
-                        controller: _passwordController,
-                        label: '密码',
-                        hint: '输入你的密码',
-                        icon: Icons.lock_outline_rounded,
-                        obscure: _obscurePassword,
-                        suffix: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                            color: cs.onSurfaceVariant.withOpacity(0.6),
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return '密码不能为空';
-                          }
-                          return null;
-                        },
-                        onFieldSubmitted: (_) => _login(),
-                      ),
-                      const SizedBox(height: 28),
-                      // 登录按钮
-                      SizedBox(
-                        height: 52,
-                        child: FilledButton(
-                          onPressed: _loading ? null : _login,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: _loading
-                              ? const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text('登录中...'),
-                                  ],
-                                )
-                              : const Text(
-                                  '登录',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      // 底部提示
-                      Text(
-                        '登录即代表同意相关服务条款',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        child: Column(
+          children: [
+            // 进度指示器
+            if (_currentStep > 0 && _currentStep < 3) _buildProgress(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildWelcome(),
+                  _buildServerSetup(),
+                  _buildAccountLogin(),
+                ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    bool obscure = false,
-    Widget? suffix,
-    String? Function(String?)? validator,
-    void Function(String)? onFieldSubmitted,
-  }) {
+  Widget _buildProgress() {
     final cs = Theme.of(context).colorScheme;
-    return TextFormField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.7)),
-        hintText: hint,
-        hintStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.4)),
-        prefixIcon: Icon(icon, size: 20, color: cs.primary),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: cs.surfaceVariant,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: cs.primary, width: 2),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Row(
+        children: [
+          _buildProgressDot(1, cs),
+          Expanded(child: Divider(color: cs.outline)),
+          _buildProgressDot(2, cs),
+        ],
       ),
-      style: TextStyle(color: cs.onSurface, fontSize: 15),
-      validator: validator,
-      onFieldSubmitted: onFieldSubmitted,
+    );
+  }
+
+  Widget _buildProgressDot(int step, ColorScheme cs) {
+    final active = _currentStep >= step;
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: active ? cs.primary : cs.surfaceVariant,
+      ),
+      child: Center(
+        child: active
+            ? Icon(Icons.check, size: 16, color: cs.onPrimary)
+            : Text(
+                '$step',
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+      ),
+    );
+  }
+
+  // ==================== 步骤 1: 欢迎页 ====================
+  Widget _buildWelcome() {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        children: [
+          const Spacer(),
+          // 应用图标
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [cs.primary, cs.tertiary],
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: const Icon(
+              Icons.mail_rounded,
+              color: Colors.white,
+              size: 48,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Cloud Mail',
+            style: TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: cs.onSurface,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '你的私人邮箱\n干净、快速、完全可控',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+          const Spacer(),
+          // 开始按钮
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: () => _goToStep(1),
+              child: const Text(
+                '开始使用',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 已有账户快速登录
+          if (StorageService.baseUrl != null &&
+              StorageService.baseUrl!.isNotEmpty)
+            TextButton(
+              onPressed: () => _goToStep(2),
+              child: const Text('直接登录已有账户'),
+            ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  // ==================== 步骤 2: 服务器配置 ====================
+  Widget _buildServerSetup() {
+    final cs = Theme.of(context).colorScheme;
+    return Form(
+      key: _urlFormKey,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Spacer(),
+          Text(
+              '连接服务器',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '输入你的 Cloud Mail 服务器地址',
+              style: TextStyle(
+                fontSize: 15,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 32),
+            TextFormField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                labelText: '服务器地址',
+                hintText: 'https://your-mail.example.com',
+                prefixIcon: Icon(Icons.link_rounded),
+              ),
+              keyboardType: TextInputType.url,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return '请输入服务器地址';
+                }
+                if (!v.trim().startsWith('http://') &&
+                    !v.trim().startsWith('https://')) {
+                  return '请以 http:// 或 https:// 开头';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: () {
+                  if (_urlFormKey.currentState!.validate()) {
+                    _goToStep(2);
+                  }
+                },
+                child: const Text('下一步'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => _goToStep(0),
+                  child: const Text('返回'),
+                ),
+              ],
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== 步骤 3: 账户登录 ====================
+  Widget _buildAccountLogin() {
+    final cs = Theme.of(context).colorScheme;
+    return Form(
+      key: _accountFormKey,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Spacer(),
+            Text(
+              '登录账户',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '使用你的邮箱账户登录',
+              style: TextStyle(
+                fontSize: 15,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 32),
+            TextFormField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                labelText: '邮箱地址',
+                hintText: 'admin@example.com',
+                prefixIcon: Icon(Icons.alternate_email_rounded),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return '请输入邮箱地址';
+                }
+                if (!v.contains('@')) {
+                  return '邮箱格式不正确';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: '密码',
+                hintText: '输入你的密码',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
+              ),
+              validator: (v) {
+                if (v == null || v.isEmpty) {
+                  return '密码不能为空';
+                }
+                return null;
+              },
+              onFieldSubmitted: (_) => _login(),
+            ),
+            const SizedBox(height: 16),
+            // 记住登录状态
+            Row(
+              children: [
+                Switch(
+                  value: _rememberLogin,
+                  onChanged: (v) {
+                    setState(() => _rememberLogin = v);
+                  },
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '记住登录状态',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: _loading ? null : _login,
+                child: _loading
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('登录中...'),
+                        ],
+                      )
+                    : const Text(
+                        '登录',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => _goToStep(1),
+                  child: const Text('返回'),
+                ),
+              ],
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
@@ -146,6 +147,8 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isGoogle = themeProvider.isGoogle;
     final senderName = _email.isSent ? _email.toName : _email.sendName;
     final senderEmail = _email.isSent ? _email.toEmail : _email.sendEmail;
     final displayName =
@@ -157,7 +160,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部导航栏（简洁）
+            // 顶部导航栏
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Row(
@@ -170,7 +173,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                   IconButton(
                     icon: Icon(
                       _isStarred ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: _isStarred ? Colors.amber : null,
+                      color: _isStarred ? cs.tertiary : null,
                       size: 24,
                     ),
                     onPressed: _loading ? null : _toggleStar,
@@ -206,31 +209,53 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                   Text(
                     _email.subject,
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: isGoogle ? 22 : 24,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
                       color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // 发件人信息卡
+                  // 发件人信息
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor: accountColor,
-                        child: Text(
-                          displayName.isNotEmpty
-                              ? displayName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                      // 头像：Google 方形圆角，Apple 圆形
+                      isGoogle
+                          ? Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: accountColor,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  displayName.isNotEmpty
+                                      ? displayName[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 22,
+                              backgroundColor: accountColor,
+                              child: Text(
+                                displayName.isNotEmpty
+                                    ? displayName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -251,7 +276,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                               senderEmail,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: cs.onSurfaceVariant.withOpacity(0.7),
+                                color: cs.onSurfaceVariant,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -261,7 +286,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                               _formatFullTime(_email.createTime),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: cs.onSurfaceVariant.withOpacity(0.5),
+                                color: cs.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -304,7 +329,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
           ],
         ),
       ),
-      // 底部操作栏（Mimestream 风格的图标按钮组）
+      // 底部操作栏
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: cs.surface,
@@ -343,7 +368,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                     ? Icons.star_rounded
                     : Icons.star_border_rounded,
                 label: _isStarred ? '已星标' : '星标',
-                color: _isStarred ? Colors.amber : null,
+                color: _isStarred ? cs.tertiary : null,
                 onTap: _loading ? null : _toggleStar,
               ),
               _buildActionButton(

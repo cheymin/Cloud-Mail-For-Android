@@ -249,20 +249,14 @@ class _ComposeScreenState extends State<ComposeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部导航栏（Mimestream 风格：取消 + 标题 + 发送）
+            // 顶部导航栏：取消 + 标题 + 发送
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Row(
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      '取消',
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 16,
-                      ),
-                    ),
+                    child: const Text('取消'),
                   ),
                   Expanded(
                     child: Text(
@@ -285,16 +279,13 @@ class _ComposeScreenState extends State<ComposeScreen> {
                       ),
                     )
                   else
-                    TextButton(
+                    FilledButton(
                       onPressed: _send,
-                      child: Text(
-                        '发送',
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 8),
                       ),
+                      child: const Text('发送'),
                     ),
                 ],
               ),
@@ -380,7 +371,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                       decoration: InputDecoration(
                         hintText: '邮箱地址，多个用逗号分隔',
                         hintStyle: TextStyle(
-                            color: cs.onSurfaceVariant.withOpacity(0.4),
+                            color: cs.onSurfaceVariant,
                             fontSize: 15),
                         border: InputBorder.none,
                         isDense: true,
@@ -399,7 +390,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                       decoration: InputDecoration(
                         hintText: '邮件主题',
                         hintStyle: TextStyle(
-                            color: cs.onSurfaceVariant.withOpacity(0.4),
+                            color: cs.onSurfaceVariant,
                             fontSize: 15),
                         border: InputBorder.none,
                         isDense: true,
@@ -458,7 +449,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                   decoration: InputDecoration(
                     hintText: '开始写邮件...',
                     hintStyle: TextStyle(
-                        color: cs.onSurfaceVariant.withOpacity(0.4),
+                        color: cs.onSurfaceVariant,
                         fontSize: 15),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
@@ -513,7 +504,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
             child: Text(
               label,
               style: TextStyle(
-                color: cs.onSurfaceVariant.withOpacity(0.7),
+                color: cs.onSurfaceVariant,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
