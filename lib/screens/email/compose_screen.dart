@@ -419,7 +419,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
+                  color: cs.surfaceVariant,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Wrap(

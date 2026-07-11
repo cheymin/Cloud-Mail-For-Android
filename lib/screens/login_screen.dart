@@ -324,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen>
         prefixIcon: Icon(icon, size: 20, color: cs.primary),
         suffixIcon: suffix,
         filled: true,
-        fillColor: cs.surfaceContainerHighest,
+        fillColor: cs.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

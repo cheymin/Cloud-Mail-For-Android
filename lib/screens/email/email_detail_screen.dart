@@ -395,7 +395,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
+        color: cs.surfaceVariant,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
