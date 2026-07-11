@@ -1,0 +1,114 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/
+          if-no-files-found: warn
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+          path: artifacts/
+
+      - name: Download Release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release
+          path: artifacts/
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: List artifacts
+        run: ls -laR artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
+
+            ### 功能
+            - 基于 Cloud Mail API 的 Android 客户端
+            - 支持邮件列表查询（收件/发件）
+            - 支持用户登录认证（Token 生成）
+            - 支持添加新用户
+            - 支持下拉刷新和分页加载
+            - 支持模糊搜索邮件
+
+            ### 下载说明
+            - `app-debug.apk` - Debug 版本，包含调试日志
+            - `app-release-unsigned.apk` - Release 未签名版本
+
+            ### 使用方法
+            1. 下载 APK 文件到 Android 设备
+            2. 允许安装未知来源应用
+            3. 安装并打开应用
+            4. 输入 Cloud Mail 服务器地址（如 `https://your-domain.com/`）
+            5. 使用管理员邮箱和密码登录
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/app-debug.apk
+            artifacts/app-release-unsigned.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
