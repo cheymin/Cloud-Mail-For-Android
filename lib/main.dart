@@ -10,6 +10,7 @@ import 'screens/email/compose_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/accounts/account_screen.dart';
 import 'screens/ai/ai_screen.dart';
+import 'screens/contacts/contacts_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,8 +33,18 @@ class CloudMailApp extends StatelessWidget {
     return MaterialApp(
       title: 'Cloud Mail',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.resolve(themeProvider.uiStyle, Brightness.light),
-      darkTheme: AppTheme.resolve(themeProvider.uiStyle, Brightness.dark),
+      theme: AppTheme.resolve(
+        themeProvider.uiStyle,
+        Brightness.light,
+        customPrimary: themeProvider.customPrimaryColor,
+        fontFamily: themeProvider.customFontFamily,
+      ),
+      darkTheme: AppTheme.resolve(
+        themeProvider.uiStyle,
+        Brightness.dark,
+        customPrimary: themeProvider.customPrimaryColor,
+        fontFamily: themeProvider.customFontFamily,
+      ),
       themeMode: themeProvider.themeMode,
       home: const _AuthChecker(),
       onGenerateRoute: (settings) {
@@ -59,6 +70,13 @@ class CloudMailApp extends StatelessWidget {
             final args = settings.arguments as Map<String, dynamic>?;
             return MaterialPageRoute(
               builder: (ctx) => AiScreen(
+                api: args?['api'] as CloudMailApi,
+              ),
+            );
+          case '/contacts':
+            final args = settings.arguments as Map<String, dynamic>?;
+            return MaterialPageRoute(
+              builder: (ctx) => ContactsScreen(
                 api: args?['api'] as CloudMailApi,
               ),
             );

@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
+import '../../utils/glass.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
 import '../settings/settings_screen.dart';
@@ -410,16 +412,46 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final cs = Theme.of(context).colorScheme;
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isGoogle = themeProvider.isGoogle;
+    final hasBg = themeProvider.hasCustomBackground;
 
     return Scaffold(
       key: _scaffoldKey,
+      // 自定义背景图：用 Stack 叠加，内容半透明以衬托毛玻璃效果
+      body: hasBg && themeProvider.customBackgroundImage != null
+          ? Stack(
+              children: [
+                // 背景图铺满
+                Positioned.fill(
+                  child: Image.file(
+                    File(themeProvider.customBackgroundImage!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+                // 前景内容
+                _buildBody(isDark, isGoogle, cs, themeProvider),
+              ],
+            )
+          : _buildBody(isDark, isGoogle, cs, themeProvider),
       drawer: _buildDrawer(isDark, isGoogle),
-      body: SafeArea(
-        child: Column(
-          children: [
-            isGoogle
+    );
+  }
+
+  Widget _buildBody(
+      bool isDark, bool isGoogle, ColorScheme cs, ThemeProvider themeProvider) {
+    return SafeArea(
+      child: Column(
+        children: [
+          // 毛玻璃顶部导航栏
+          GlassBox(
+            isDark: isDark,
+            blur: 25,
+            opacity: 0.7,
+            radius: 0,
+            child: isGoogle
                 ? _buildGoogleAppBar(isDark)
                 : _buildAppleAppBar(isDark),
+          ),
             // 静默刷新指示条：缓存已显示，正在拉取最新数据
             if (_silentRefreshing)
               Container(
@@ -1135,6 +1167,15 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/ai',
+                          arguments: {'api': widget.api});
+                    },
+                  ),
+                  _buildPlainItem(
+                    icon: Icons.contacts_outlined,
+                    title: '联系人',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/contacts',
                           arguments: {'api': widget.api});
                     },
                   ),

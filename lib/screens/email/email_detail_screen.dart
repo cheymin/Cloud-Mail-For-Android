@@ -32,8 +32,6 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   double _contentScale = 1.0;
   // InteractiveViewer 的变换控制器，用于菜单按钮缩放
   late final TransformationController _transformController;
-  // 是否显示纯文本视图（可长按选择复制）；false=HTML 排版视图
-  bool _showPlainText = false;
   static const double _minScale = 0.5;
   static const double _maxScale = 5.0;
 
@@ -656,47 +654,30 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
         : const SizedBox.shrink();
 
     // InteractiveViewer：双指自由缩放整个内容（像浏览器看 HTML 一样）
-    // constrained: true 保持布局完整，不破坏 SelectionArea
-    // boundaryMargin 让缩放后内容可滚动查看
+    // SelectionArea：长按文字弹出系统级 复制/分享/全选 菜单
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         scaleIndicator,
-        // 视图切换：HTML 渲染 / 纯文本（可长按选择复制）
-        Row(
-          children: [
-            _buildViewToggle(cs, true),
-            const SizedBox(width: 8),
-            _buildViewToggle(cs, false),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
+        Container(
           width: double.infinity,
-          child: InteractiveViewer(
-            transformationController: _transformController,
-            minScale: _minScale,
-            maxScale: _maxScale,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            onInteractionEnd: (details) {
-              final scale = _transformController.value.getMaxScaleOnAxis();
-              if ((scale - _contentScale).abs() > 0.01) {
-                setState(() => _contentScale = scale);
-              }
-            },
-            child: _showPlainText
-                ? SelectableText(
-                    _email.text.isNotEmpty
-                        ? _email.text
-                        : content.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.6,
-                      color: cs.onSurface,
-                    ),
-                  )
-                : (hasHtml
-                    ? HtmlWidget(
+          // ClipRect 防止缩放后内容溢出到其他区域
+          child: ClipRect(
+            child: InteractiveViewer(
+              transformationController: _transformController,
+              minScale: _minScale,
+              maxScale: _maxScale,
+              // 默认 constrained=true，保持内容宽度适配屏幕
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              onInteractionEnd: (details) {
+                final scale = _transformController.value.getMaxScaleOnAxis();
+                if ((scale - _contentScale).abs() > 0.01) {
+                  setState(() => _contentScale = scale);
+                }
+              },
+              child: hasHtml
+                  ? SelectionArea(
+                      child: HtmlWidget(
                         content,
                         onTapUrl: (url) async {
                           final uri = Uri.parse(url);
@@ -711,54 +692,20 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                           height: 1.6,
                           color: cs.onSurface,
                         ),
-                      )
-                    : SelectableText(
-                        content,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.6,
-                          color: cs.onSurface,
-                        ),
-                      )),
+                      ),
+                    )
+                  : SelectableText(
+                      content,
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: cs.onSurface,
+                      ),
+                    ),
+            ),
           ),
         ),
       ],
-    );
-  }
-
-  /// 视图切换按钮：HTML / 纯文本
-  Widget _buildViewToggle(ColorScheme cs, bool isHtml) {
-    final selected = isHtml ? !_showPlainText : _showPlainText;
-    final label = isHtml ? '排版视图' : '纯文本';
-    final icon = isHtml ? Icons.article_outlined : Icons.text_snippet_outlined;
-    return GestureDetector(
-      onTap: () => setState(() => _showPlainText = !isHtml),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer : cs.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? cs.primary : cs.outlineVariant,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: selected ? cs.primary : cs.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: selected ? cs.primary : cs.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

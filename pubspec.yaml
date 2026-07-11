@@ -1,7 +1,7 @@
 name: cloud_mail_app
 description: Cloud Mail 客户端 - 基于 Cloud Mail API 的现代化邮件管理应用
 publish_to: 'none'
-version: 4.2.0+16
+version: 4.3.0+17
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

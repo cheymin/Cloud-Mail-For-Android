@@ -15,10 +15,19 @@ class ThemeProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   UiStyle _uiStyle = UiStyle.google;
 
+  // 个性化
+  Color? _customPrimaryColor;
+  String? _customFontFamily;
+  String? _customBackgroundImage;
+
   ThemeMode get themeMode => _themeMode;
   UiStyle get uiStyle => _uiStyle;
   bool get isGoogle => _uiStyle == UiStyle.google;
   bool get isApple => _uiStyle == UiStyle.apple;
+
+  Color? get customPrimaryColor => _customPrimaryColor;
+  String? get customFontFamily => _customFontFamily;
+  String? get customBackgroundImage => _customBackgroundImage;
 
   void init() {
     final stored = StorageService.themeMode;
@@ -33,6 +42,10 @@ class ThemeProvider extends ChangeNotifier {
         _themeMode = ThemeMode.system;
     }
     _uiStyle = UiStyleX.fromString(StorageService.uiStyle);
+    final colorVal = StorageService.customPrimaryColor;
+    _customPrimaryColor = colorVal == null ? null : Color(colorVal);
+    _customFontFamily = StorageService.customFontFamily;
+    _customBackgroundImage = StorageService.customBackgroundImage;
     notifyListeners();
   }
 
@@ -57,6 +70,30 @@ class ThemeProvider extends ChangeNotifier {
     StorageService.uiStyle = style.label;
     notifyListeners();
   }
+
+  /// 自定义主题色，传 null 恢复默认
+  void setCustomPrimaryColor(Color? color) {
+    _customPrimaryColor = color;
+    StorageService.customPrimaryColor = color?.value;
+    notifyListeners();
+  }
+
+  /// 自定义字体，传 null 恢复默认
+  void setCustomFontFamily(String? family) {
+    _customFontFamily = family;
+    StorageService.customFontFamily = family;
+    notifyListeners();
+  }
+
+  /// 自定义背景图路径，传 null 移除
+  void setCustomBackgroundImage(String? path) {
+    _customBackgroundImage = path;
+    StorageService.customBackgroundImage = path;
+    notifyListeners();
+  }
+
+  /// 当前是否启用了自定义背景图
+  bool get hasCustomBackground => _customBackgroundImage != null;
 }
 
 /// 账户标识色板（两种风格共用）
@@ -805,11 +842,88 @@ class AppTheme {
   }
 
   /// 根据 UI 风格 + 明暗模式返回对应主题
-  static ThemeData resolve(UiStyle style, Brightness brightness) {
+  /// [customPrimary] 自定义主题色（覆盖默认 primary）
+  /// [fontFamily] 自定义字体家族（应用到全局文字）
+  static ThemeData resolve(
+    UiStyle style,
+    Brightness brightness, {
+    Color? customPrimary,
+    String? fontFamily,
+  }) {
+    ThemeData theme;
     if (style == UiStyle.google) {
-      return brightness == Brightness.dark ? googleDark() : googleLight();
+      theme = brightness == Brightness.dark ? googleDark() : googleLight();
     } else {
-      return brightness == Brightness.dark ? appleDark() : appleLight();
+      theme = brightness == Brightness.dark ? appleDark() : appleLight();
     }
+
+    if (customPrimary != null || fontFamily != null) {
+      theme = theme.copyWith(
+        colorScheme: customPrimary == null
+            ? theme.colorScheme
+            : theme.colorScheme.copyWith(
+                primary: customPrimary,
+                primaryContainer: _lighten(customPrimary, brightness == Brightness.dark ? -0.3 : 0.85),
+                onPrimaryContainer: brightness == Brightness.dark
+                    ? _lighten(customPrimary, 0.6)
+                    : _darken(customPrimary, 0.5),
+                inversePrimary: _lighten(customPrimary, 0.3),
+                surfaceTint: customPrimary,
+              ),
+        appBarTheme: theme.appBarTheme.copyWith(
+          iconTheme: customPrimary == null
+              ? null
+              : IconThemeData(color: customPrimary),
+        ),
+        iconTheme: customPrimary == null
+            ? null
+            : IconThemeData(color: customPrimary, size: theme.iconTheme.size),
+        textTheme: fontFamily == null
+            ? null
+            : _applyFontFamily(theme.textTheme, fontFamily),
+        primaryTextTheme: fontFamily == null
+            ? null
+            : _applyFontFamily(theme.primaryTextTheme, fontFamily),
+        fontFamily: fontFamily,
+      );
+    }
+    return theme;
+  }
+
+  /// 给 TextTheme 中所有样式应用字体家族
+  static TextTheme _applyFontFamily(TextTheme base, String family) {
+    return base.copyWith(
+      displayLarge: base.displayLarge?.copyWith(fontFamily: family),
+      displayMedium: base.displayMedium?.copyWith(fontFamily: family),
+      displaySmall: base.displaySmall?.copyWith(fontFamily: family),
+      headlineLarge: base.headlineLarge?.copyWith(fontFamily: family),
+      headlineMedium: base.headlineMedium?.copyWith(fontFamily: family),
+      headlineSmall: base.headlineSmall?.copyWith(fontFamily: family),
+      titleLarge: base.titleLarge?.copyWith(fontFamily: family),
+      titleMedium: base.titleMedium?.copyWith(fontFamily: family),
+      titleSmall: base.titleSmall?.copyWith(fontFamily: family),
+      bodyLarge: base.bodyLarge?.copyWith(fontFamily: family),
+      bodyMedium: base.bodyMedium?.copyWith(fontFamily: family),
+      bodySmall: base.bodySmall?.copyWith(fontFamily: family),
+      labelLarge: base.labelLarge?.copyWith(fontFamily: family),
+      labelMedium: base.labelMedium?.copyWith(fontFamily: family),
+      labelSmall: base.labelSmall?.copyWith(fontFamily: family),
+    );
+  }
+
+  /// 颜色调亮（amount 0~1）
+  static Color _lighten(Color c, double amount) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl
+        .withLightness((hsl.lightness + amount).clamp(0.0, 1.0))
+        .toColor();
+  }
+
+  /// 颜色调暗（amount 0~1）
+  static Color _darken(Color c, double amount) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl
+        .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
+        .toColor();
   }
 }

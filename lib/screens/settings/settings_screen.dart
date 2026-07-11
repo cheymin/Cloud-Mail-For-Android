@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../services/ai_service.dart';
+import '../../services/contact_sync.dart';
+import '../../services/webdav_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
 import '../login_screen.dart';
@@ -31,6 +34,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 应用当前版本（运行时从 package_info_plus 动态读取）
   String _appVersion = '4.2.0';
 
+  // WebDAV 配置
+  final _davUrlController = TextEditingController();
+  final _davUserController = TextEditingController();
+  final _davPassController = TextEditingController();
+  final _davDirController = TextEditingController(text: '/CloudMail');
+  bool _testingDav = false;
+  bool _syncing = false;
+
+  // 主题色预设
+  static const _presetColors = <Color>[
+    Color(0xFF1A73E8), // Google 蓝
+    Color(0xFFEA4335), // 红
+    Color(0xFF34C759), // 绿
+    Color(0xFFFF9500), // 橙
+    Color(0xFF5856D6), // 靛
+    Color(0xFFAF52DE), // 紫
+    Color(0xFFFF2D55), // 粉
+    Color(0xFF00C7BE), // 青
+    Color(0xFF8E8E93), // 灰
+  ];
+
+  // 字体预设（系统字体）
+  static const _presetFonts = <String>['系统默认', 'serif', 'monospace'];
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +67,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
     _selectedModel = StorageService.openaiModel;
     _loadAppVersion();
+    _loadWebDavConfig();
+  }
+
+  void _loadWebDavConfig() {
+    final cfg = ContactSync.loadConfig();
+    if (cfg != null) {
+      _davUrlController.text = cfg.url;
+      _davUserController.text = cfg.username;
+      _davPassController.text = cfg.password;
+      _davDirController.text = cfg.remoteDir;
+    }
   }
 
   /// 从 package_info_plus 动态读取版本号，与 pubspec.yaml 自动同步
@@ -60,7 +98,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _apiKeyController.dispose();
     _baseUrlController.dispose();
+    _davUrlController.dispose();
+    _davUserController.dispose();
+    _davPassController.dispose();
+    _davDirController.dispose();
     super.dispose();
+  }
+
+  // ===== WebDAV 同步 =====
+
+  void _saveWebDavConfig() {
+    final cfg = WebDavConfig(
+      url: _davUrlController.text.trim(),
+      username: _davUserController.text.trim(),
+      password: _davPassController.text,
+      remoteDir: _davDirController.text.trim().isEmpty
+          ? '/CloudMail'
+          : _davDirController.text.trim(),
+    );
+    ContactSync.saveConfig(cfg);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('WebDAV 配置已保存')),
+      );
+    }
+  }
+
+  Future<void> _testWebDav() async {
+    final cfg = WebDavConfig(
+      url: _davUrlController.text.trim(),
+      username: _davUserController.text.trim(),
+      password: _davPassController.text,
+      remoteDir: _davDirController.text.trim().isEmpty
+          ? '/CloudMail'
+          : _davDirController.text.trim(),
+    );
+    if (!cfg.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请填写完整的服务器地址、用户名和密码')),
+      );
+      return;
+    }
+    setState(() => _testingDav = true);
+    final ok = await ContactSync.testConnection(cfg);
+    if (mounted) {
+      setState(() => _testingDav = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '连接成功' : '连接失败，请检查配置')),
+      );
+    }
+  }
+
+  Future<void> _syncContacts() async {
+    setState(() => _syncing = true);
+    final result = await ContactSync.sync();
+    if (mounted) {
+      setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
+  }
+
+  // ===== 个性化 =====
+
+  Future<void> _pickBackgroundImage() async {
+    final picker = ImagePicker();
+    try {
+      final xfile = await picker.pickImage(source: ImageSource.gallery);
+      if (xfile == null) return;
+      final path = xfile.path;
+      if (mounted) {
+        context.read<ThemeProvider>().setCustomBackgroundImage(path);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('背景图已设置')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选择图片失败: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _fetchModels() async {
@@ -264,6 +384,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           const SizedBox(height: 24),
 
+          _buildSectionTitle('个性化'),
+          _buildCard([
+            // 主题色选择
+            InkWell(
+              onTap: () => _showColorPicker(themeProvider),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.palette,
+                        color: Theme.of(context).colorScheme.primary, size: 22),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('主题色',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface)),
+                          Text(
+                              themeProvider.customPrimaryColor == null
+                                  ? '默认'
+                                  : '自定义',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: themeProvider.customPrimaryColor ??
+                            Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .outlineVariant,
+                            width: 1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, indent: 56),
+            // 字体选择
+            _buildTile(
+              icon: Icons.text_fields_outlined,
+              title: '字体',
+              subtitle: _fontLabel(themeProvider.customFontFamily),
+              onTap: () => _showFontPicker(themeProvider),
+            ),
+            const Divider(height: 1, indent: 56),
+            // 背景图
+            _buildTile(
+              icon: Icons.wallpaper_outlined,
+              title: '背景图',
+              subtitle: themeProvider.hasCustomBackground ? '已设置' : '默认',
+              onTap: _pickBackgroundImage,
+            ),
+            if (themeProvider.hasCustomBackground) ...[
+              const Divider(height: 1, indent: 56),
+              _buildTile(
+                icon: Icons.close,
+                title: '移除背景图',
+                onTap: () {
+                  themeProvider.setCustomBackgroundImage(null);
+                },
+              ),
+            ],
+          ]),
+          const SizedBox(height: 24),
+
           _buildSectionTitle('邮件'),
           _buildCard([
             _buildTile(
@@ -403,6 +606,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.language_outlined,
               title: '服务器地址',
               subtitle: StorageService.baseUrl ?? '未知',
+            ),
+          ]),
+          const SizedBox(height: 24),
+
+          // ===== WebDAV 云同步 =====
+          _buildSectionTitle('云同步'),
+          _buildCard([
+            _buildAiField(
+              label: '服务器地址',
+              hint: 'https://dav.example.com/remote.php/dav/files/user',
+              controller: _davUrlController,
+              isDark: isDark,
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            _buildAiField(
+              label: '用户名',
+              hint: '用户名',
+              controller: _davUserController,
+              isDark: isDark,
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            _buildAiField(
+              label: '密码',
+              hint: '应用密码',
+              controller: _davPassController,
+              obscure: true,
+              isDark: isDark,
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            _buildAiField(
+              label: '远程目录',
+              hint: '/CloudMail',
+              controller: _davDirController,
+              isDark: isDark,
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _testingDav ? null : _testWebDav,
+                      icon: _testingDav
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.wifi_protected_setup, size: 18),
+                      label: const Text('测试连接'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _syncing ? null : _syncContacts,
+                      icon: _syncing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.sync, size: 18),
+                      label: const Text('立即同步'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton.tonal(
+                onPressed: _saveWebDavConfig,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('保存配置'),
+              ),
             ),
           ]),
           const SizedBox(height: 24),
@@ -676,5 +975,120 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// 主题色选择弹窗
+  void _showColorPicker(ThemeProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('选择主题色'),
+        content: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            // 恢复默认
+            GestureDetector(
+              onTap: () {
+                provider.setCustomPrimaryColor(null);
+                Navigator.pop(ctx);
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Theme.of(ctx).colorScheme.outline, width: 1.5),
+                ),
+                child: Icon(Icons.refresh,
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              ),
+            ),
+            ..._presetColors.map((c) {
+              final selected =
+                  provider.customPrimaryColor?.value == c.value;
+              return GestureDetector(
+                onTap: () {
+                  provider.setCustomPrimaryColor(c);
+                  Navigator.pop(ctx);
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: c,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(ctx).colorScheme.onSurface
+                          : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check, color: Colors.white)
+                      : null,
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 字体选择弹窗
+  void _showFontPicker(ThemeProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择字体'),
+        children: _presetFonts.map((f) {
+          final actual = f == '系统默认' ? null : f;
+          final selected = provider.customFontFamily == actual;
+          return SimpleDialogOption(
+            onPressed: () {
+              provider.setCustomFontFamily(actual);
+              Navigator.pop(ctx);
+            },
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    f,
+                    style: TextStyle(
+                      fontFamily: actual,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 字体显示文字
+  String _fontLabel(String? family) {
+    if (family == null) return '系统默认';
+    switch (family) {
+      case 'serif':
+        return '衬线字体';
+      case 'monospace':
+        return '等宽字体';
+      default:
+        return family;
+    }
   }
 }

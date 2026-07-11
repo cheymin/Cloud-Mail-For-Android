@@ -144,6 +144,47 @@ class StorageService {
     }
   }
 
+  // ===== 个性化配置 =====
+  // 自定义主题色（ARGB 整数），null 表示用默认
+  static int? get customPrimaryColor => _prefs?.getInt('customPrimaryColor');
+  static set customPrimaryColor(int? value) {
+    if (value != null) {
+      _prefs?.setInt('customPrimaryColor', value);
+    } else {
+      _prefs?.remove('customPrimaryColor');
+    }
+  }
+
+  // 自定义字体家族名，null 表示用默认
+  static String? get customFontFamily => _prefs?.getString('customFontFamily');
+  static set customFontFamily(String? value) {
+    if (value != null) {
+      _prefs?.setString('customFontFamily', value);
+    } else {
+      _prefs?.remove('customFontFamily');
+    }
+  }
+
+  // 自定义背景图本地路径，null 表示无
+  static String? get customBackgroundImage => _prefs?.getString('customBackgroundImage');
+  static set customBackgroundImage(String? value) {
+    if (value != null) {
+      _prefs?.setString('customBackgroundImage', value);
+    } else {
+      _prefs?.remove('customBackgroundImage');
+    }
+  }
+
+  // ===== WebDAV 配置（JSON 字符串）=====
+  static String? get webdavConfig => _prefs?.getString('webdavConfig');
+  static set webdavConfig(String? value) {
+    if (value != null) {
+      _prefs?.setString('webdavConfig', value);
+    } else {
+      _prefs?.remove('webdavConfig');
+    }
+  }
+
   // AI 对话历史（JSON 字符串）
   static String? get chatHistory => _prefs?.getString('chatHistory');
   static set chatHistory(String? value) {

@@ -11,27 +11,20 @@ class UpdateService {
   static const String repoUrl =
       'https://github.com/$repoOwner/$repoName';
 
-  /// 仓库为私有，需要 token 才能访问 releases API。
-  /// 这是一个只读 token（建议使用 fine-grained PAT，仅授予 Releases/Contents 读权限）。
-  /// 如需更换，替换此处即可。
-  static const String _githubToken = 'GITHUB_TOKEN_REDACTED';
-
   /// 拉取所有已发布的 release（用于更新页展示历史版本列表）
   ///
   /// 失败时抛出 [UpdateException]，UI 层可据此显示具体原因。
   static Future<List<ReleaseInfo>> fetchAllReleases() async {
     final url =
         'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=30';
-    // GitHub API 要求带 User-Agent；私有仓库需要 Bearer token
+    // GitHub API 要求带 User-Agent
     final response = await http.get(Uri.parse(url), headers: {
       'Accept': 'application/vnd.github+json',
       'User-Agent': 'Cloud-Mail-App',
-      'Authorization': 'Bearer $_githubToken',
     });
 
     if (response.statusCode == 404) {
-      // 仓库不存在 / token 失效 / 无 release
-      throw UpdateException('无法访问仓库（可能 token 失效或暂无发布版本）', code: 404);
+      throw UpdateException('仓库暂无任何已发布版本', code: 404);
     }
     if (response.statusCode == 403) {
       final body = _safeDecode(response);
@@ -42,9 +35,6 @@ class UpdateService {
             : 'GitHub 拒绝了请求（403）',
         code: 403,
       );
-    }
-    if (response.statusCode == 401) {
-      throw UpdateException('GitHub token 已失效，请联系开发者更新', code: 401);
     }
     if (response.statusCode != 200) {
       final body = utf8.decode(response.bodyBytes);
