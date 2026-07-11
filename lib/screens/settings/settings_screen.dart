@@ -42,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _checkUpdate() async {
     setState(() => _checkingUpdate = true);
     try {
-      final updateInfo = await UpdateService.checkUpdate('2.1.2');
+      final updateInfo = await UpdateService.checkUpdate('2.1.3');
       setState(() => _checkingUpdate = false);
 
       if (updateInfo?.hasUpdate == true) {
@@ -220,7 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.update_outlined,
                   title: '检查更新',
-                  subtitle: '当前版本: 2.1.2',
+                  subtitle: '当前版本: 2.1.3',
                   onTap: _checkingUpdate ? null : _checkUpdate,
                   trailing: _checkingUpdate
                       ? const SizedBox(

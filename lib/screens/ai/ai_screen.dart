@@ -136,7 +136,7 @@ class _AiScreenState extends State<AiScreen> {
                 color: Color(0xFF6C63FF),
                 borderRadius: BorderRadius.all(Radius.circular(18)),
               ),
-              child: const Icon(Icons.bot, color: Colors.white, size: 20),
+              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
             ),
           const SizedBox(width: 8),
           Expanded(
