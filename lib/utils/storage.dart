@@ -58,6 +58,33 @@ class StorageService {
     _prefs?.setBool('autoLoadImages', value);
   }
 
+  static String? get openaiApiKey => _prefs?.getString('openaiApiKey');
+  static set openaiApiKey(String? value) {
+    if (value != null) {
+      _prefs?.setString('openaiApiKey', value);
+    } else {
+      _prefs?.remove('openaiApiKey');
+    }
+  }
+
+  static String? get openaiBaseUrl => _prefs?.getString('openaiBaseUrl');
+  static set openaiBaseUrl(String? value) {
+    if (value != null) {
+      _prefs?.setString('openaiBaseUrl', value);
+    } else {
+      _prefs?.remove('openaiBaseUrl');
+    }
+  }
+
+  static String? get lastCheckUpdateTime => _prefs?.getString('lastCheckUpdateTime');
+  static set lastCheckUpdateTime(String? value) {
+    if (value != null) {
+      _prefs?.setString('lastCheckUpdateTime', value);
+    } else {
+      _prefs?.remove('lastCheckUpdateTime');
+    }
+  }
+
   static void clear() {
     _prefs?.remove('token');
     _prefs?.remove('email');

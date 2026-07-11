@@ -9,6 +9,7 @@ import 'screens/email/email_detail_screen.dart';
 import 'screens/email/compose_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/accounts/account_screen.dart';
+import 'screens/ai/ai_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +52,13 @@ class CloudMailApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (ctx) => EmailDetailScreen(
                 email: args?['email'],
+                api: args?['api'] as CloudMailApi,
+              ),
+            );
+          case '/ai':
+            final args = settings.arguments as Map<String, dynamic>?;
+            return MaterialPageRoute(
+              builder: (ctx) => AiScreen(
                 api: args?['api'] as CloudMailApi,
               ),
             );

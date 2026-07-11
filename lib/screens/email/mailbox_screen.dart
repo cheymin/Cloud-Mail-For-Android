@@ -467,6 +467,14 @@ class _MailboxScreenState extends State<MailboxScreen> {
                   ),
                   const Divider(height: 24),
                   ListTile(
+                    leading: const Icon(Icons.bot_outlined),
+                    title: const Text('AI 助手'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/ai', arguments: {'api': widget.api});
+                    },
+                  ),
+                  ListTile(
                     leading: const Icon(Icons.account_circle_outlined),
                     title: const Text('邮箱账户'),
                     onTap: _openAccounts,

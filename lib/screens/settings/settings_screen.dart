@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
+import '../../services/update_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
 import '../login_screen.dart';
@@ -17,12 +19,77 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _showAvatar = true;
   bool _autoLoadImages = true;
+  bool _checkingUpdate = false;
+  final _apiKeyController = TextEditingController();
+  final _baseUrlController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _showAvatar = StorageService.showSenderAvatar;
     _autoLoadImages = StorageService.autoLoadImages;
+    _apiKeyController.text = StorageService.openaiApiKey ?? '';
+    _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    _baseUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkUpdate() async {
+    setState(() => _checkingUpdate = true);
+    try {
+      final updateInfo = await UpdateService.checkUpdate('2.1.0');
+      setState(() => _checkingUpdate = false);
+
+      if (updateInfo?.hasUpdate == true) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('发现新版本 v${updateInfo!.version}'),
+            content: Text(updateInfo.releaseNotes.isNotEmpty
+                ? updateInfo.releaseNotes
+                : '有新版本可用，建议更新'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('稍后'),
+              ),
+              if (updateInfo.downloadUrl != null)
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    if (await canLaunchUrl(Uri.parse(updateInfo.downloadUrl!))) {
+                      await launchUrl(Uri.parse(updateInfo.downloadUrl!));
+                    }
+                  },
+                  child: const Text('立即下载'),
+                ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前已是最新版本 ✨')),
+        );
+      }
+    } catch (e) {
+      setState(() => _checkingUpdate = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('检查更新失败: ${e.toString()}')),
+      );
+    }
+  }
+
+  void _saveOpenAIConfig() {
+    StorageService.openaiApiKey = _apiKeyController.text.trim().isEmpty ? null : _apiKeyController.text.trim();
+    StorageService.openaiBaseUrl = _baseUrlController.text.trim().isEmpty ? null : _baseUrlController.text.trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('OpenAI 配置已保存')),
+    );
   }
 
   Future<void> _logout() async {
@@ -136,6 +203,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       setState(() => _autoLoadImages = val);
                       StorageService.autoLoadImages = val;
                     },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('更新'),
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardTheme.color,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                _buildTile(
+                  icon: Icons.update_outlined,
+                  title: '检查更新',
+                  subtitle: '当前版本: 2.1.0',
+                  onTap: _checkingUpdate ? null : _checkUpdate,
+                  trailing: _checkingUpdate
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('AI 助手'),
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardTheme.color,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('OpenAI API Key', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _apiKeyController,
+                        decoration: InputDecoration(
+                          hintText: 'sk-xxxxxxxxxxxxxxxxxx',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        obscureText: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('API 地址', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _baseUrlController,
+                        decoration: InputDecoration(
+                          hintText: 'https://api.openai.com/v1',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: FilledButton(
+                    onPressed: _saveOpenAIConfig,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                    ),
+                    child: const Text('保存配置'),
                   ),
                 ),
               ],
