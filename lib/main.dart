@@ -32,8 +32,8 @@ class CloudMailApp extends StatelessWidget {
     return MaterialApp(
       title: 'Cloud Mail',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.resolve(themeProvider.uiStyle, Brightness.light),
+      darkTheme: AppTheme.resolve(themeProvider.uiStyle, Brightness.dark),
       themeMode: themeProvider.themeMode,
       home: const _AuthChecker(),
       onGenerateRoute: (settings) {

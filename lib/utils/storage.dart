@@ -48,6 +48,18 @@ class StorageService {
     _prefs?.setString('themeMode', value);
   }
 
+  /// UI 风格：'google' | 'apple'，默认 'google'
+  static String get uiStyle => _prefs?.getString('uiStyle') ?? 'google';
+  static set uiStyle(String value) {
+    _prefs?.setString('uiStyle', value);
+  }
+
+  /// 记住登录状态
+  static bool get rememberLogin => _prefs?.getBool('rememberLogin') ?? true;
+  static set rememberLogin(bool value) {
+    _prefs?.setBool('rememberLogin', value);
+  }
+
   static bool get showSenderAvatar => _prefs?.getBool('showSenderAvatar') ?? true;
   static set showSenderAvatar(bool value) {
     _prefs?.setBool('showSenderAvatar', value);
@@ -113,69 +125,41 @@ class StorageService {
 
 class ErrorMessages {
   static const List<String> connectionErrors = [
-    '哎呀妈呀！网络它离家出走了！',
-    '啪！网线断了，就像我的心一样碎了',
-    '网络：我不干了！',
-    '连接失败？大概是服务器在摸鱼吧',
-    '啊哦，连不上了，要不你重启一下路由器试试？',
-    '网络它有自己的想法，它不想连接',
+    '网络连接失败，请检查网络设置',
+    '无法连接到服务器，请稍后重试',
+    '网络不可用，请检查你的连接',
   ];
 
   static const List<String> timeoutErrors = [
-    '等得花儿都谢了，服务器还在化妆...',
-    '服务器：等我再睡五分钟',
-    '超时了！服务器是不是去喝咖啡了？',
-    '等了好久好久，结果啥也没等来',
-    '服务器在思考人生，没空理你',
-    '加载中...加载中...加载了个寂寞',
+    '请求超时，请稍后重试',
+    '服务器响应超时',
   ];
 
   static const List<String> authErrors = [
-    '密码就像你的初恋，总是记不住的那个才最难忘',
-    '身份验证失败，你是机器人吗？',
-    '登不进去？想想是不是密码大小写搞反了',
-    'Token 已过期，就像牛奶一样，过期了就得换',
-    '权限不足？是不是管理员把你拉黑了',
-    '登录失败，可能是因为你长得太帅了系统不敢认',
+    '认证失败，请重新登录',
+    '登录已过期，请重新登录',
+    '邮箱或密码错误',
   ];
 
   static const List<String> serverErrors = [
-    '服务器：我裂开了。',
-    '后端小哥：这不是我写的 bug！',
-    '500 错误，服务器它疯了',
-    '服务器内部错误，建议给它放个假',
-    '出了点问题，具体啥问题服务器也说不清楚',
-    '服务器：今天不想干活，别烦我',
+    '服务器错误，请稍后重试',
+    '服务器内部错误',
   ];
 
   static const List<String> unknownErrors = [
-    '出了点问题，具体啥问题我也不知道...',
-    'Bug 它来了，它带着错误走来了',
-    '发生了一件不可思议的事情',
-    '未知错误，可能是玄学问题',
-    '程序它有自己的想法',
-    '这个错误太神秘了，我都看不懂',
+    '发生未知错误',
+    '操作失败，请稍后重试',
   ];
 
-  static String getConnection() {
-    return (connectionErrors..shuffle()).first;
-  }
+  static String getConnection() => connectionErrors.first;
 
-  static String getTimeout() {
-    return (timeoutErrors..shuffle()).first;
-  }
+  static String getTimeout() => timeoutErrors.first;
 
-  static String getAuth() {
-    return (authErrors..shuffle()).first;
-  }
+  static String getAuth() => authErrors.first;
 
-  static String getServer() {
-    return (serverErrors..shuffle()).first;
-  }
+  static String getServer() => serverErrors.first;
 
-  static String getUnknown() {
-    return (unknownErrors..shuffle()).first;
-  }
+  static String getUnknown() => unknownErrors.first;
 
   static String fromException(dynamic e) {
     final msg = e.toString().toLowerCase();
@@ -198,6 +182,6 @@ class ErrorMessages {
     if (msg.contains('500') || msg.contains('internal server')) {
       return getServer();
     }
-    return '${getUnknown()}\n\n原始错误：${e.toString()}';
+    return '${getUnknown()}\n\n${e.toString()}';
   }
 }

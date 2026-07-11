@@ -98,7 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return ListTile(
                 title: Text(m),
                 trailing: _selectedModel == m
-                    ? const Icon(Icons.check, color: Color(0xFF6C63FF))
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                     : null,
                 onTap: () => Navigator.pop(ctx, m),
               );
@@ -123,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _checkUpdate() async {
     setState(() => _checkingUpdate = true);
     try {
-      final updateInfo = await UpdateService.checkUpdate('3.0.0');
+      final updateInfo = await UpdateService.checkUpdate('4.0.0');
       setState(() => _checkingUpdate = false);
 
       if (updateInfo?.hasUpdate == true) {
@@ -231,6 +231,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 _buildTile(
+                  icon: Icons.style_outlined,
+                  title: '界面风格',
+                  subtitle: _uiStyleText(themeProvider.uiStyle),
+                  onTap: () => _showUiStyleDialog(themeProvider),
+                ),
+                const Divider(height: 1, indent: 56),
+                _buildTile(
                   icon: Icons.dark_mode_outlined,
                   title: '深色模式',
                   subtitle: isDark ? '当前是深色模式' : '当前是浅色模式',
@@ -301,7 +308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.update_outlined,
                   title: '检查更新',
-                  subtitle: '当前版本: 3.0.0',
+                  subtitle: '当前版本: 4.0.0',
                   onTap: _checkingUpdate ? null : _checkUpdate,
                   trailing: _checkingUpdate
                       ? const SizedBox(
@@ -476,7 +483,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.info_outline,
                   title: '版本',
-                  subtitle: '2.3.1',
+                  subtitle: '4.0.0',
                 ),
                 const Divider(height: 1, indent: 56),
                 _buildTile(
@@ -592,6 +599,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case ThemeMode.system:
         return '跟随系统';
     }
+  }
+
+  String _uiStyleText(UiStyle style) {
+    switch (style) {
+      case UiStyle.google:
+        return 'Google 风（Material You）';
+      case UiStyle.apple:
+        return 'Apple 风（Mimestream）';
+    }
+  }
+
+  void _showUiStyleDialog(ThemeProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择界面风格'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              provider.setUiStyle(UiStyle.google);
+              Navigator.pop(ctx);
+            },
+            child: ListTile(
+              leading: Icon(
+                provider.uiStyle == UiStyle.google
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text('Google 风'),
+              subtitle: const Text('Material You · 密集列表 · pill 按钮'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              provider.setUiStyle(UiStyle.apple);
+              Navigator.pop(ctx);
+            },
+            child: ListTile(
+              leading: Icon(
+                provider.uiStyle == UiStyle.apple
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text('Apple 风'),
+              subtitle: const Text('Mimestream · 留白 · 圆形头像'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showThemeDialog(ThemeProvider provider) {
