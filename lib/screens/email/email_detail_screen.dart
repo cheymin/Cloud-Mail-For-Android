@@ -50,17 +50,13 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     }
   }
 
-  Color _avatarColor(String name) {
-    final hash = name.hashCode;
-    final colors = [
-      const Color(0xFF6C63FF),
-      const Color(0xFFFF6584),
-      const Color(0xFF00D4AA),
-      const Color(0xFFFFB800),
-      const Color(0xFF6366F1),
-      const Color(0xFFEC4899),
-    ];
-    return colors[hash.abs() % colors.length];
+  String _formatFullTime(String timeStr) {
+    try {
+      final dt = DateTime.parse(timeStr);
+      return DateFormat('yyyy-MM-dd HH:mm').format(dt);
+    } catch (e) {
+      return timeStr;
+    }
   }
 
   Future<void> _toggleStar() async {
@@ -116,7 +112,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
         if (mounted) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('邮件已删除，回收站见~')),
+            const SnackBar(content: Text('已移到垃圾箱')),
           );
         }
       } else {
@@ -149,83 +145,89 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final senderName =
-        _email.isSent ? _email.toName : _email.sendName;
-    final senderEmail =
-        _email.isSent ? _email.toEmail : _email.sendEmail;
-    final displayName = senderName.isNotEmpty ? senderName : senderEmail.split('@').first;
+    final cs = Theme.of(context).colorScheme;
+    final senderName = _email.isSent ? _email.toName : _email.sendName;
+    final senderEmail = _email.isSent ? _email.toEmail : _email.sendEmail;
+    final displayName =
+        senderName.isNotEmpty ? senderName : senderEmail.split('@').first;
+    final accountColor = AppTheme.accountColor(senderEmail);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 80,
-            floating: true,
-            pinned: true,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.pop(context),
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(
-                  _isStarred ? Icons.star : Icons.star_border,
-                  color: _isStarred ? Colors.amber : null,
-                ),
-                onPressed: _loading ? null : _toggleStar,
-              ),
-              IconButton(
-                icon: const Icon(Icons.reply),
-                onPressed: _reply,
-              ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'delete') _deleteEmail();
-                },
-                itemBuilder: (ctx) => [
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline, size: 20),
-                      SizedBox(width: 8),
-                      Text('删除'),
-                    ]),
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 顶部导航栏（简洁）
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, size: 22),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      _isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: _isStarred ? Colors.amber : null,
+                      size: 24,
+                    ),
+                    onPressed: _loading ? null : _toggleStar,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.reply_rounded, size: 22),
+                    onPressed: _reply,
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'delete') _deleteEmail();
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          Icon(Icons.delete_outline, size: 20),
+                          SizedBox(width: 8),
+                          Text('删除'),
+                        ]),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            // 邮件内容
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
                 children: [
+                  // 主题（大标题）
                   Text(
                     _email.subject,
-                    style: const TextStyle(
-                      fontSize: 22,
+                    style: TextStyle(
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
+                      color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // 发件人信息卡
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       CircleAvatar(
-                        radius: 24,
-                        backgroundColor: _avatarColor(displayName),
+                        radius: 22,
+                        backgroundColor: accountColor,
                         child: Text(
                           displayName.isNotEmpty
                               ? displayName[0].toUpperCase()
                               : '?',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -234,138 +236,152 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    displayName,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(
-                                  _formatTime(_email.createTime),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              displayName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${_email.isSent ? '发给 ' : '来自 '}$senderEmail',
+                              senderEmail,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
+                                color: cs.onSurfaceVariant.withOpacity(0.7),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _email.isSent
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _email.isSent ? '已发送' : '收件箱',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: _email.isSent
-                                      ? Colors.blue
-                                      : Colors.green,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            Text(
+                              _formatFullTime(_email.createTime),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant.withOpacity(0.5),
                               ),
                             ),
                           ],
                         ),
                       ),
+                      // 收件人标签
+                      if (_email.isSent)
+                        Container(
+                          margin: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '发给 $displayName',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   const Divider(height: 1),
                   const SizedBox(height: 16),
+                  // 附件
                   if (_email.attList != null && _email.attList!.isNotEmpty) ...[
                     _buildAttachments(isDark),
                     const SizedBox(height: 16),
                   ],
+                  // 邮件正文
                   _buildEmailContent(isDark),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: BottomAppBar(
-        elevation: 0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+      // 底部操作栏（Mimestream 风格的图标按钮组）
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(
+            top: BorderSide(
+              color: cs.outlineVariant,
+              width: 0.5,
+            ),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildActionButton(
+                icon: Icons.reply_rounded,
+                label: '回复',
+                onTap: _reply,
+              ),
+              _buildActionButton(
+                icon: Icons.forward_rounded,
+                label: '转发',
+                onTap: () => Navigator.pushNamed(
+                  context,
+                  '/compose',
+                  arguments: {
+                    'api': widget.api,
+                    'forwardEmail': _email,
+                  },
+                ),
+              ),
+              _buildActionButton(
+                icon: _isStarred
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                label: _isStarred ? '已星标' : '星标',
+                color: _isStarred ? Colors.amber : null,
+                onTap: _loading ? null : _toggleStar,
+              ),
+              _buildActionButton(
+                icon: Icons.delete_outline_rounded,
+                label: '删除',
+                color: cs.error,
+                onTap: _deleteEmail,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    Color? color,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              onPressed: _reply,
-              icon: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.reply),
-                  SizedBox(height: 2),
-                  Text('回复', style: TextStyle(fontSize: 11)),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: () => Navigator.pushNamed(
-                context,
-                '/compose',
-                arguments: {
-                  'api': widget.api,
-                  'forwardEmail': _email,
-                },
-              ),
-              icon: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.forward),
-                  SizedBox(height: 2),
-                  Text('转发', style: TextStyle(fontSize: 11)),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: _loading ? null : _toggleStar,
-              icon: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _isStarred ? Icons.star : Icons.star_border,
-                    color: _isStarred ? Colors.amber : null,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(_isStarred ? '已星标' : '星标',
-                      style: const TextStyle(fontSize: 11)),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: _deleteEmail,
-              icon: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.delete_outline),
-                  SizedBox(height: 2),
-                  Text('删除', style: TextStyle(fontSize: 11)),
-                ],
+            Icon(icon, size: 22, color: color ?? cs.primary),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color ?? cs.primary,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -375,24 +391,26 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   }
 
   Widget _buildAttachments(bool isDark) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(12),
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.attach_file, size: 18),
+              Icon(Icons.attach_file, size: 18, color: cs.primary),
               const SizedBox(width: 8),
               Text(
                 '${_email.attList!.length} 个附件',
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
+                  color: cs.onSurface,
                 ),
               ),
             ],
@@ -405,7 +423,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                     Icon(
                       _getIconForFile(att.fileName),
                       size: 20,
-                      color: AppTheme.primary,
+                      color: cs.primary,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -414,7 +432,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         children: [
                           Text(
                             att.fileName,
-                            style: const TextStyle(fontSize: 14),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: cs.onSurface,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -422,9 +443,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                             _formatFileSize(att.fileSize),
                             style: TextStyle(
                               fontSize: 12,
-                              color: isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[600],
+                              color: cs.onSurfaceVariant.withOpacity(0.6),
                             ),
                           ),
                         ],
@@ -453,6 +472,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   }
 
   Widget _buildEmailContent(bool isDark) {
+    final cs = Theme.of(context).colorScheme;
     final content = _email.content;
     final hasHtml = content.contains('<') && content.contains('>');
 
@@ -462,9 +482,15 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
           padding: const EdgeInsets.all(40),
           child: Column(
             children: [
-              Icon(Icons.drafts, size: 48, color: Colors.grey[400]),
+              Icon(Icons.drafts_outlined,
+                  size: 48, color: cs.onSurfaceVariant.withOpacity(0.3)),
               const SizedBox(height: 12),
-              Text('这封邮件是空的', style: TextStyle(color: Colors.grey[500])),
+              Text(
+                '这封邮件是空的',
+                style: TextStyle(
+                  color: cs.onSurfaceVariant.withOpacity(0.5),
+                ),
+              ),
             ],
           ),
         ),
@@ -484,7 +510,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
         textStyle: TextStyle(
           fontSize: 15,
           height: 1.6,
-          color: isDark ? Colors.white : Colors.black87,
+          color: cs.onSurface,
         ),
       );
     }
@@ -494,7 +520,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       style: TextStyle(
         fontSize: 15,
         height: 1.6,
-        color: isDark ? Colors.white : Colors.black87,
+        color: cs.onSurface,
       ),
     );
   }
