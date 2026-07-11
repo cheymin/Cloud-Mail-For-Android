@@ -28,9 +28,28 @@ class CloudMailApi {
         if (token != null) 'Authorization': token!,
       };
 
+  /// 健壮的响应解析：处理非 JSON 响应、格式不匹配等情况
   ApiResponse<T> _parseResponse<T>(http.Response response, T Function(dynamic)? dataParser) {
-    final Map<String, dynamic> json = jsonDecode(utf8.decode(response.bodyBytes));
-    return ApiResponse<T>.fromJson(json, dataParser);
+    final bodyStr = utf8.decode(response.bodyBytes);
+    try {
+      final json = jsonDecode(bodyStr);
+      if (json is! Map<String, dynamic>) {
+        // 响应不是对象（可能是数组或原始值）
+        return ApiResponse<T>(
+          code: response.statusCode == 200 ? 200 : 0,
+          message: '响应格式异常',
+          data: null,
+        );
+      }
+      return ApiResponse<T>.fromJson(json, dataParser);
+    } catch (e) {
+      // 响应不是 JSON（可能是 HTML 错误页）
+      return ApiResponse<T>(
+        code: response.statusCode,
+        message: 'HTTP ${response.statusCode}: ${bodyStr.length > 200 ? bodyStr.substring(0, 200) : bodyStr}',
+        data: null,
+      );
+    }
   }
 
   Future<ApiResponse<String>> genToken(String email, String password) async {
@@ -115,7 +134,10 @@ class CloudMailApi {
     final response = await http.get(uri, headers: _headers);
 
     return _parseResponse<List<Email>>(response, (data) {
-      return (data as List).map((e) => Email.fromJson(e)).toList();
+      if (data is List) {
+        return data.map((e) => Email.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
     });
   }
 
@@ -164,8 +186,12 @@ class CloudMailApi {
       body: jsonEncode(body),
     );
 
+    // 发送邮件的响应 data 格式不确定，只关心是否成功
     return _parseResponse<List<Email>>(response, (data) {
-      return (data as List).map((e) => Email.fromJson(e)).toList();
+      if (data is List) {
+        return data.map((e) => Email.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return []; // 成功但 data 不是列表，返回空列表
     });
   }
 
@@ -175,7 +201,10 @@ class CloudMailApi {
     final response = await http.get(uri, headers: _headers);
 
     return _parseResponse<List<Attachment>>(response, (data) {
-      return (data as List).map((e) => Attachment.fromJson(e)).toList();
+      if (data is List) {
+        return data.map((e) => Attachment.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
     });
   }
 
@@ -207,7 +236,10 @@ class CloudMailApi {
     final response = await http.get(uri, headers: _headers);
 
     return _parseResponse<List<Email>>(response, (data) {
-      return (data as List).map((e) => Email.fromJson(e)).toList();
+      if (data is List) {
+        return data.map((e) => Email.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
     });
   }
 
@@ -218,7 +250,10 @@ class CloudMailApi {
     );
 
     return _parseResponse<List<Account>>(response, (data) {
-      return (data as List).map((e) => Account.fromJson(e)).toList();
+      if (data is List) {
+        return data.map((e) => Account.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
     });
   }
 

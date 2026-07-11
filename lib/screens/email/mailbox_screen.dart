@@ -173,7 +173,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
           });
         }
       } else {
-        final isDel = _currentFolder == MailFolder.trash ? 2 : null;
+        final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
           type: _emailType,
           size: 20,
@@ -224,7 +224,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
         }
       } else {
         _currentPage++;
-        final isDel = _currentFolder == MailFolder.trash ? 2 : null;
+        final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
           type: _emailType,
           size: 20,

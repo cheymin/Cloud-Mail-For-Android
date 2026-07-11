@@ -137,10 +137,18 @@ class ApiResponse<T> {
   bool get isSuccess => code == 200;
 
   factory ApiResponse.fromJson(Map<String, dynamic> json, T Function(dynamic)? dataParser) {
+    T? parsedData;
+    if (json['data'] != null && dataParser != null) {
+      try {
+        parsedData = dataParser(json['data']);
+      } catch (_) {
+        // 数据解析失败，但不影响判断成功与否
+      }
+    }
     return ApiResponse<T>(
-      code: json['code'] ?? 0,
-      message: json['message'] ?? '',
-      data: json['data'] != null && dataParser != null ? dataParser(json['data']) : null,
+      code: json['code'] ?? (json['success'] == true ? 200 : 0),
+      message: json['message'] ?? json['msg'] ?? '',
+      data: parsedData,
     );
   }
 }
