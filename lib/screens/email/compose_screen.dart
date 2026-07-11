@@ -31,6 +31,8 @@ class _ComposeScreenState extends State<ComposeScreen> {
   bool _sending = false;
   List<Map<String, dynamic>> _attachments = [];
   int? _selectedAccountId;
+  List<Account> _accounts = [];
+  bool _loadingAccounts = true;
 
   @override
   void initState() {
@@ -58,6 +60,37 @@ class _ComposeScreenState extends State<ComposeScreen> {
           '${fwd.text}';
     }
     _selectedAccountId = StorageService.currentAccountId;
+    _loadAccounts();
+  }
+
+  Future<void> _loadAccounts() async {
+    setState(() => _loadingAccounts = true);
+    try {
+      final response = await widget.api.getAccountList();
+      if (response.isSuccess && response.data != null) {
+        setState(() {
+          _accounts = response.data!;
+          // 检查当前选中的账户是否还在列表中
+          final exists = _accounts.any((a) => a.accountId == _selectedAccountId);
+          if (!exists || _selectedAccountId == null) {
+            if (_accounts.isNotEmpty) {
+              _selectedAccountId = _accounts.first.accountId;
+              StorageService.currentAccountId = _selectedAccountId;
+            } else {
+              _selectedAccountId = null;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载账户失败: ${ErrorMessages.fromException(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingAccounts = false);
+    }
   }
 
   @override
@@ -233,6 +266,62 @@ class _ComposeScreenState extends State<ComposeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 发件人选择
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('发件人', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _loadingAccounts
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : _accounts.isEmpty
+                                  ? const Text('暂无可用账户', style: TextStyle(color: Colors.red))
+                                  : DropdownButton<int>(
+                                      value: _selectedAccountId,
+                                      isExpanded: true,
+                                      underline: const SizedBox(),
+                                      items: _accounts.map((acc) {
+                                        return DropdownMenuItem<int>(
+                                          value: acc.accountId,
+                                          child: Text(
+                                            acc.name.isNotEmpty
+                                                ? '${acc.name} <${acc.email}>'
+                                                : acc.email,
+                                            style: const TextStyle(fontSize: 14),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _selectedAccountId = val;
+                                          if (val != null) {
+                                            StorageService.currentAccountId = val;
+                                          }
+                                        });
+                                      },
+                                    ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 4),

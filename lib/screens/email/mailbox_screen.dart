@@ -21,6 +21,7 @@ class MailboxScreen extends StatefulWidget {
 enum MailFolder { inbox, sent, starred, trash }
 
 class _MailboxScreenState extends State<MailboxScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   MailFolder _currentFolder = MailFolder.inbox;
   List<Email> _emails = [];
   bool _loading = true;
@@ -34,8 +35,24 @@ class _MailboxScreenState extends State<MailboxScreen> {
   @override
   void initState() {
     super.initState();
-    _loadEmails();
+    _initData();
     _scrollController.addListener(_scrollListener);
+  }
+
+  Future<void> _initData() async {
+    // 确保账户列表已加载，currentAccountId 有值
+    try {
+      final accResp = await widget.api.getAccountList();
+      if (accResp.isSuccess && accResp.data != null) {
+        final accounts = accResp.data!;
+        final currentId = StorageService.currentAccountId;
+        final exists = accounts.any((a) => a.accountId == currentId);
+        if (!exists && accounts.isNotEmpty) {
+          StorageService.currentAccountId = accounts.first.accountId;
+        }
+      }
+    } catch (_) {}
+    _loadEmails();
   }
 
   @override
@@ -286,6 +303,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: _buildDrawer(isDark),
       body: SafeArea(
@@ -342,7 +360,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
         children: [
           IconButton(
             icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           Expanded(
             child: AnimatedContainer(
