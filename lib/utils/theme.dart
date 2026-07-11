@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../utils/storage.dart';
 
 /// UI 风格枚举
@@ -19,6 +21,8 @@ class ThemeProvider extends ChangeNotifier {
   Color? _customPrimaryColor;
   String? _customFontFamily;
   String? _customBackgroundImage;
+  // 用户导入的自定义字体文件路径（持久化到文档目录）
+  String? _customFontPath;
 
   ThemeMode get themeMode => _themeMode;
   UiStyle get uiStyle => _uiStyle;
@@ -28,6 +32,7 @@ class ThemeProvider extends ChangeNotifier {
   Color? get customPrimaryColor => _customPrimaryColor;
   String? get customFontFamily => _customFontFamily;
   String? get customBackgroundImage => _customBackgroundImage;
+  String? get customFontPath => _customFontPath;
 
   void init() {
     final stored = StorageService.themeMode;
@@ -45,7 +50,50 @@ class ThemeProvider extends ChangeNotifier {
     final colorVal = StorageService.customPrimaryColor;
     _customPrimaryColor = colorVal == null ? null : Color(colorVal);
     _customFontFamily = StorageService.customFontFamily;
+    _customFontPath = StorageService.customFontPath;
     _customBackgroundImage = StorageService.customBackgroundImage;
+    // 如果有导入的自定义字体文件，异步加载（不阻塞 init）
+    if (_customFontPath != null && _customFontFamily != null) {
+      _loadFontFile(_customFontPath!, _customFontFamily!);
+    }
+    notifyListeners();
+  }
+
+  /// 加载字体文件到 Flutter 字体注册表
+  Future<void> _loadFontFile(String path, String familyName) async {
+    try {
+      final file = File(path);
+      if (!await file.exists()) return;
+      final bytes = await file.readAsBytes();
+      final loader = FontLoader(familyName);
+      loader.addFont(Future.value(ByteData.sublistView(bytes)));
+      await loader.load();
+    } catch (_) {}
+  }
+
+  /// 导入自定义字体文件
+  /// [sourcePath] file_picker 返回的源文件路径
+  /// [displayName] 字体显示名（用于 fontFamily 引用）
+  Future<void> importCustomFont(String sourcePath, String displayName) async {
+    // 复制到应用文档目录持久化（file_picker 缓存路径可能被系统清理）
+    final dir = await getApplicationDocumentsDirectory();
+    final fontsDir = Directory('${dir.path}/fonts');
+    if (!await fontsDir.exists()) {
+      await fontsDir.create(recursive: true);
+    }
+    final ext = sourcePath.contains('.')
+        ? sourcePath.split('.').last
+        : 'ttf';
+    final destPath = '${fontsDir.path}/$displayName.$ext';
+    await File(sourcePath).copy(destPath);
+
+    // 加载字体到注册表
+    await _loadFontFile(destPath, displayName);
+
+    _customFontPath = destPath;
+    _customFontFamily = displayName;
+    StorageService.customFontPath = destPath;
+    StorageService.customFontFamily = displayName;
     notifyListeners();
   }
 
@@ -79,6 +127,8 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   /// 自定义字体，传 null 恢复默认
+  /// 切换字体家族名时不清除已导入的字体文件路径，
+  /// 这样用户可以随时在导入字体和内置字体之间切换
   void setCustomFontFamily(String? family) {
     _customFontFamily = family;
     StorageService.customFontFamily = family;

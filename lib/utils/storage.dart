@@ -165,6 +165,16 @@ class StorageService {
     }
   }
 
+  // 用户导入的自定义字体文件路径（持久化到文档目录），null 表示无
+  static String? get customFontPath => _prefs?.getString('customFontPath');
+  static set customFontPath(String? value) {
+    if (value != null) {
+      _prefs?.setString('customFontPath', value);
+    } else {
+      _prefs?.remove('customFontPath');
+    }
+  }
+
   // 自定义背景图本地路径，null 表示无
   static String? get customBackgroundImage => _prefs?.getString('customBackgroundImage');
   static set customBackgroundImage(String? value) {

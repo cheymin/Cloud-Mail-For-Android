@@ -32,8 +32,8 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   double _contentScale = 1.0;
   // InteractiveViewer 的变换控制器，用于菜单按钮缩放
   late final TransformationController _transformController;
-  static const double _minScale = 0.5;
-  static const double _maxScale = 5.0;
+  static const double _minScale = 0.75;
+  static const double _maxScale = 3.0;
 
   @override
   void initState() {
@@ -572,8 +572,15 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                       icon: const Icon(Icons.download, size: 20),
                       onPressed: () async {
                         if (att.url != null && att.url!.isNotEmpty) {
-                          if (await canLaunchUrl(Uri.parse(att.url!))) {
-                            await launchUrl(Uri.parse(att.url!));
+                          try {
+                            await launchUrl(Uri.parse(att.url!),
+                                mode: LaunchMode.externalApplication);
+                          } catch (_) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('附件地址暂不可用')),
+                              );
+                            }
                           }
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -655,6 +662,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
 
     // InteractiveViewer：双指自由缩放整个内容（像浏览器看 HTML 一样）
     // SelectionArea：长按文字弹出系统级 复制/分享/全选 菜单
+    // 关键参数说明：
+    //  - boundaryMargin 用有限值，避免内容被拖到"太平洋"（无限远）
+    //  - alignment topCenter，缩放时以顶部为锚点，更自然
+    //  - constrained true（默认），内容宽度适配屏幕，缩小时不留白
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -667,8 +678,11 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
               transformationController: _transformController,
               minScale: _minScale,
               maxScale: _maxScale,
-              // 默认 constrained=true，保持内容宽度适配屏幕
-              boundaryMargin: const EdgeInsets.all(double.infinity),
+              // 有限的边界 margin：允许放大后平移查看，但不会拖到屏幕外太远
+              boundaryMargin: const EdgeInsets.all(40),
+              alignment: Alignment.topCenter,
+              // 限制缩放手势的灵敏度，避免误判为滑动
+              interactionEndFrictionCoefficient: 0.05,
               onInteractionEnd: (details) {
                 final scale = _transformController.value.getMaxScaleOnAxis();
                 if ((scale - _contentScale).abs() > 0.01) {
@@ -681,10 +695,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         content,
                         onTapUrl: (url) async {
                           final uri = Uri.parse(url);
-                          if (await canLaunchUrl(uri)) {
+                          try {
                             await launchUrl(uri,
                                 mode: LaunchMode.externalApplication);
-                          }
+                          } catch (_) {}
                           return true;
                         },
                         textStyle: TextStyle(

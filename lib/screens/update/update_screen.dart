@@ -61,25 +61,104 @@ class _UpdateScreenState extends State<UpdateScreen> {
     }
   }
 
+  /// GitHub 下载镜像列表（解决国内直连 GitHub 下载慢 / 打不开的问题）
+  /// 规则：{prefix} + 原始 github.com 下载链接
+  static const _mirrors = <String>[
+    'direct', // 直连（原始 GitHub）
+    'https://ghproxy.com/', // ghproxy
+    'https://mirror.ghproxy.com/', // ghproxy 镜像
+    'https://github.moeyy.xyz/', // moeyy
+    'https://kkgithub.com/', // kkgithub（替换域名）
+    'https://gh.api.99988866.xyz/', // 99988866
+    'https://hub.gitmirror.com/', // gitmirror
+  ];
+
+  /// 拼接镜像 URL
+  /// - direct：原样返回
+  /// - kkgithub.com：把 github.com 替换为 kkgithub.com（域名替换型）
+  /// - 其他：前缀 + 原始 URL（代理型）
+  String _wrapWithMirror(String url, String mirror) {
+    if (mirror == 'direct') return url;
+    if (mirror.contains('kkgithub.com')) {
+      return url.replaceFirst('github.com', 'kkgithub.com');
+    }
+    return '$mirror$url';
+  }
+
   /// 下载指定 release 的 APK；若没有 APK 资源，跳转到 release 页面
+  /// 点击后弹出镜像选择，用户选一个镜像再打开浏览器下载
   Future<void> _download(ReleaseInfo r) async {
-    setState(() => _downloadingTag = r.tagName);
-    try {
-      final url = r.apkUrl;
-      Uri? uri;
-      if (url != null && url.isNotEmpty) {
-        uri = Uri.parse(url);
-      } else {
-        // 没有 APK 资源，退回到 release 页
-        uri = Uri.parse(r.htmlUrl.isNotEmpty
+    final rawUrl = r.apkUrl;
+    final hasApk = rawUrl != null && rawUrl.isNotEmpty;
+    final downloadUrl = hasApk
+        ? rawUrl!
+        : (r.htmlUrl.isNotEmpty
             ? r.htmlUrl
             : '${UpdateService.repoUrl}/releases');
-      }
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
+
+    // 弹出镜像选择
+    final selectedMirror = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择下载源'),
+        children: _mirrors.map((m) {
+          final label = m == 'direct'
+              ? 'GitHub 直连（原始）'
+              : m.replaceAll('https://', '').replaceAll('/', '');
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, m),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(m == 'direct'
+                      ? Icons.cloud_download_outlined
+                      : Icons.bolt_outlined,
+                  size: 20,
+                  color: Theme.of(ctx).colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w500)),
+                        if (m != 'direct')
+                          Text(
+                            '国内加速镜像',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(ctx)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (selectedMirror == null) return;
+
+    setState(() => _downloadingTag = r.tagName);
+    try {
+      final url = _wrapWithMirror(downloadUrl, selectedMirror);
+      // 直接 launchUrl，不再用 canLaunchUrl 预检（Android 11+ 会误报 false）
+      await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法打开下载链接，请稍后重试')),
+          SnackBar(content: Text('打开链接失败: $e，请换个下载源重试')),
         );
       }
     } finally {
@@ -263,9 +342,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
         child: OutlinedButton.icon(
           onPressed: () async {
             final uri = Uri.parse('${UpdateService.repoUrl}/releases');
-            if (await canLaunchUrl(uri)) {
+            try {
               await launchUrl(uri, mode: LaunchMode.externalApplication);
-            }
+            } catch (_) {}
           },
           icon: const Icon(Icons.open_in_new, size: 18),
           label: const Text('在 GitHub 上查看全部发布'),
@@ -540,9 +619,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
               onPressed: () async {
                 final uri =
                     Uri.parse('${UpdateService.repoUrl}/releases');
-                if (await canLaunchUrl(uri)) {
+                try {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
+                } catch (_) {}
               },
               icon: const Icon(Icons.open_in_new, size: 18),
               label: const Text('在浏览器中查看'),

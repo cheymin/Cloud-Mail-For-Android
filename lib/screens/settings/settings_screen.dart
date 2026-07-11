@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -756,10 +757,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () async {
                 const url =
                     'https://github.com/cheymin/Cloud-Mail-For-Android';
-                if (await canLaunchUrl(Uri.parse(url))) {
+                try {
                   await launchUrl(Uri.parse(url),
                       mode: LaunchMode.externalApplication);
-                }
+                } catch (_) {}
               },
             ),
           ]),
@@ -777,6 +778,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               child: const Text('退出登录'),
+            ),
+          ),
+          const SizedBox(height: 32),
+          // 作者署名
+          Center(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.favorite,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Cloud Mail',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Made with ❤ by Cheymin',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -1044,39 +1075,144 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// 字体选择弹窗
+  /// 字体选择弹窗（含导入自定义字体入口）
   void _showFontPicker(ThemeProvider provider) {
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('选择字体'),
-        children: _presetFonts.map((f) {
-          final actual = f == '系统默认' ? null : f;
-          final selected = provider.customFontFamily == actual;
-          return SimpleDialogOption(
+        children: [
+          // 内置字体
+          ..._presetFonts.map((f) {
+            final actual = f == '系统默认' ? null : f;
+            // 已导入的自定义字体不在这里显示（避免与内置字体名冲突）
+            final selected = provider.customFontPath == null &&
+                provider.customFontFamily == actual;
+            return SimpleDialogOption(
+              onPressed: () {
+                provider.setCustomFontFamily(actual);
+                Navigator.pop(ctx);
+              },
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      f,
+                      style: TextStyle(
+                        fontFamily: actual,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (selected)
+                    Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary),
+                ],
+              ),
+            );
+          }),
+          // 已导入的自定义字体（如果有）
+          if (provider.customFontPath != null &&
+              provider.customFontFamily != null) ...[
+            const Divider(height: 1),
+            SimpleDialogOption(
+              onPressed: () {
+                provider.setCustomFontFamily(provider.customFontFamily);
+                Navigator.pop(ctx);
+              },
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          provider.customFontFamily!,
+                          style: TextStyle(
+                            fontFamily: provider.customFontFamily,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          '已导入的自定义字体',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 当前正在使用导入的字体时显示 check
+                  //（排除内置字体：null / serif / monospace）
+                  if (provider.customFontFamily != null &&
+                      !const {'serif', 'monospace'}
+                          .contains(provider.customFontFamily))
+                    Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary),
+                ],
+              ),
+            ),
+          ],
+          const Divider(height: 1),
+          // 导入自定义字体入口
+          SimpleDialogOption(
             onPressed: () {
-              provider.setCustomFontFamily(actual);
               Navigator.pop(ctx);
+              _importCustomFont(provider);
             },
             child: Row(
               children: [
+                Icon(Icons.file_upload_outlined,
+                    size: 20, color: Theme.of(ctx).colorScheme.primary),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    f,
+                    '导入自定义字体…',
                     style: TextStyle(
-                      fontFamily: actual,
-                      fontSize: 16,
+                      fontSize: 15,
+                      color: Theme.of(ctx).colorScheme.primary,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                if (selected)
-                  Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary),
               ],
             ),
-          );
-        }).toList(),
+          ),
+        ],
       ),
     );
+  }
+
+  /// 导入自定义字体文件（.ttf / .otf）
+  Future<void> _importCustomFont(ThemeProvider provider) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['ttf', 'otf'],
+        withData: false,
+      );
+      if (result == null || result.files.single.path == null) return;
+
+      final file = result.files.single;
+      final sourcePath = file.path!;
+      // 用文件名（去扩展名）作为字体家族名
+      final displayName = file.name.contains('.')
+          ? file.name.substring(0, file.name.lastIndexOf('.'))
+          : file.name;
+
+      await provider.importCustomFont(sourcePath, displayName);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('字体「$displayName」已导入并应用')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入字体失败: $e')),
+        );
+      }
+    }
   }
 
   /// 字体显示文字

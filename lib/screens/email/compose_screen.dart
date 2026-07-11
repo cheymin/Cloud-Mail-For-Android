@@ -244,250 +244,203 @@ class _ComposeScreenState extends State<ComposeScreen> {
             ? '转发'
             : '写邮件';
 
+    // 全屏写邮件：标准 AppBar + 无边框字段区 + 正文直接铺满
     return Scaffold(
       backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 顶部导航栏：取消 + 标题 + 发送
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
-                  ),
-                  Expanded(
-                    child: Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                  if (_sending)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  else
-                    FilledButton(
-                      onPressed: _send,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 8),
-                      ),
-                      child: const Text('发送'),
-                    ),
-                ],
-              ),
-            ),
-            // 邮件字段区
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.outlineVariant, width: 0.5),
-              ),
-              child: Column(
-                children: [
-                  // 发件人（账户选择）
-                  _buildFieldRow(
-                    label: '发件人',
-                    child: _loadingAccounts
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2),
-                          )
-                        : _accounts.isEmpty
-                            ? Text(
-                                '暂无可用账户',
-                                style: TextStyle(
-                                    color: cs.error, fontSize: 14),
-                              )
-                            : DropdownButton<int>(
-                                value: _selectedAccountId,
-                                isExpanded: true,
-                                underline: const SizedBox(),
-                                style: TextStyle(
-                                    color: cs.onSurface, fontSize: 15),
-                                items: _accounts.map((acc) {
-                                  final color =
-                                      AppTheme.accountColor(acc.email);
-                                  return DropdownMenuItem<int>(
-                                    value: acc.accountId,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 8,
-                                          height: 8,
-                                          margin: const EdgeInsets.only(
-                                              right: 8),
-                                          decoration: BoxDecoration(
-                                            color: color,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Text(
-                                            acc.name.isNotEmpty
-                                                ? '${acc.name} <${acc.email}>'
-                                                : acc.email,
-                                            overflow:
-                                                TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _selectedAccountId = val;
-                                    if (val != null) {
-                                      StorageService.currentAccountId = val;
-                                    }
-                                  });
-                                },
-                              ),
-                  ),
-                  _buildDivider(),
-                  // 收件人
-                  _buildFieldRow(
-                    label: '收件人',
-                    child: TextField(
-                      controller: _toController,
-                      decoration: InputDecoration(
-                        hintText: '邮箱地址，多个用逗号分隔',
-                        hintStyle: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 15),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      style: TextStyle(color: cs.onSurface, fontSize: 15),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                  ),
-                  _buildDivider(),
-                  // 主题
-                  _buildFieldRow(
-                    label: '主题',
-                    child: TextField(
-                      controller: _subjectController,
-                      decoration: InputDecoration(
-                        hintText: '邮件主题',
-                        hintStyle: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 15),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      style: TextStyle(color: cs.onSurface, fontSize: 15),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 附件列表
-            if (_attachments.isNotEmpty)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cs.surfaceVariant,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (var i = 0; i < _attachments.length; i++)
-                      Chip(
-                        label: Text(
-                          _attachments[i]['filename'],
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        avatar: const Icon(Icons.attach_file, size: 16),
-                        deleteIcon: const Icon(Icons.close, size: 16),
-                        onDeleted: () => _removeAttachment(i),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                  ],
-                ),
-              ),
-            // 正文区
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cs.outlineVariant, width: 0.5),
-                ),
-                child: TextField(
-                  controller: _contentController,
-                  maxLines: null,
-                  expands: true,
-                  decoration: InputDecoration(
-                    hintText: '开始写邮件...',
-                    hintStyle: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 15),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  style: TextStyle(
-                      color: cs.onSurface, fontSize: 15, height: 1.5),
-                ),
-              ),
-            ),
-            // 底部工具栏
-            Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                border: Border(
-                  top: BorderSide(color: cs.outlineVariant, width: 0.5),
-                ),
-              ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.image_outlined, size: 22),
-                    color: cs.primary,
-                    onPressed: _pickImage,
-                    tooltip: '添加图片',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.attach_file_rounded, size: 22),
-                    color: cs.primary,
-                    onPressed: _pickFile,
-                    tooltip: '添加附件',
-                  ),
-                ],
-              ),
-            ),
-          ],
+      appBar: AppBar(
+        leading: TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
         ),
+        title: Text(title),
+        centerTitle: false,
+        actions: [
+          if (_sending)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton(
+                onPressed: _send,
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                ),
+                child: const Text('发送'),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 邮件字段区（无边框，用细分割线分隔，标准全屏邮件布局）
+          _buildFieldRow(
+            label: '发件人',
+            child: _loadingAccounts
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : _accounts.isEmpty
+                    ? Text('暂无可用账户',
+                        style: TextStyle(color: cs.error, fontSize: 14))
+                    : DropdownButton<int>(
+                        value: _selectedAccountId,
+                        isExpanded: true,
+                        underline: const SizedBox(),
+                        style:
+                            TextStyle(color: cs.onSurface, fontSize: 15),
+                        items: _accounts.map((acc) {
+                          final color = AppTheme.accountColor(acc.email);
+                          return DropdownMenuItem<int>(
+                            value: acc.accountId,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    acc.name.isNotEmpty
+                                        ? '${acc.name} <${acc.email}>'
+                                        : acc.email,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedAccountId = val;
+                            if (val != null) {
+                              StorageService.currentAccountId = val;
+                            }
+                          });
+                        },
+                      ),
+          ),
+          _buildDivider(),
+          _buildFieldRow(
+            label: '收件人',
+            child: TextField(
+              controller: _toController,
+              decoration: InputDecoration(
+                hintText: '邮箱地址，多个用逗号分隔',
+                hintStyle:
+                    TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              style: TextStyle(color: cs.onSurface, fontSize: 15),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ),
+          _buildDivider(),
+          _buildFieldRow(
+            label: '主题',
+            child: TextField(
+              controller: _subjectController,
+              decoration: InputDecoration(
+                hintText: '邮件主题',
+                hintStyle:
+                    TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              style: TextStyle(color: cs.onSurface, fontSize: 15),
+            ),
+          ),
+          _buildDivider(),
+          // 附件列表（无边框）
+          if (_attachments.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < _attachments.length; i++)
+                    Chip(
+                      label: Text(
+                        _attachments[i]['filename'],
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      avatar: const Icon(Icons.attach_file, size: 16),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      onDeleted: () => _removeAttachment(i),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ),
+          // 正文区：直接铺满，无边框，左对齐
+          Expanded(
+            child: TextField(
+              controller: _contentController,
+              maxLines: null,
+              expands: true,
+              textAlign: TextAlign.left,
+              textAlignVertical: TextAlignVertical.top,
+              decoration: InputDecoration(
+                hintText: '开始写邮件...',
+                hintStyle:
+                    TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.5),
+            ),
+          ),
+          // 底部工具栏
+          Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(
+                top: BorderSide(color: cs.outlineVariant, width: 0.5),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.image_outlined, size: 22),
+                  color: cs.primary,
+                  onPressed: _pickImage,
+                  tooltip: '添加图片',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.attach_file_rounded, size: 22),
+                  color: cs.primary,
+                  onPressed: _pickFile,
+                  tooltip: '添加附件',
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

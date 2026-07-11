@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../models/contact.dart';
 import '../../services/api_service.dart';
 import '../../utils/storage.dart';
@@ -416,6 +417,263 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
   }
 
+  // ===== 快速导入 =====
+
+  /// 解析一行文本为 (姓名, 邮箱)
+  /// 支持格式：
+  ///   "姓名 <email@example.com>"
+  ///   "姓名,email@example.com"
+  ///   "姓名;email@example.com"
+  ///   "姓名 email@example.com"（最后一个 token 是邮箱）
+  ///   "email@example.com"（姓名取 @ 前部分）
+  (String, String)? _parseLine(String line) {
+    line = line.trim();
+    if (line.isEmpty) return null;
+
+    // 格式1：姓名 <email>
+    final angleMatch = RegExp(r'^(.+?)\s*<([^>]+)>\s*$').firstMatch(line);
+    if (angleMatch != null) {
+      return (angleMatch.group(1)!.trim(), angleMatch.group(2)!.trim());
+    }
+
+    // 格式2：用逗号/分号分隔
+    if (line.contains(',') || line.contains(';')) {
+      final parts = line.split(RegExp(r'[,;]'));
+      if (parts.length >= 2) {
+        final email = parts.last.trim();
+        final name = parts.take(parts.length - 1).join(' ').trim();
+        if (RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+          return (name.isEmpty ? email.split('@').first : name, email);
+        }
+      }
+    }
+
+    // 格式3：用空格分隔，最后一个 token 是邮箱
+    final tokens = line.split(RegExp(r'\s+'));
+    if (tokens.length >= 2) {
+      final last = tokens.last;
+      if (RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(last)) {
+        final name = tokens.take(tokens.length - 1).join(' ').trim();
+        return (name.isEmpty ? last.split('@').first : name, last);
+      }
+    }
+
+    // 格式4：纯邮箱
+    if (RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(line)) {
+      return (line.split('@').first, line);
+    }
+
+    return null;
+  }
+
+  /// 批量粘贴文本导入
+  Future<void> _importFromText() async {
+    final cs = Theme.of(context).colorScheme;
+    final textCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('批量粘贴导入'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '每行一个联系人，支持以下格式：',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '张三 <zhangsan@example.com>\n张三,zhangsan@example.com\nzhangsan@example.com',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurfaceVariant.withOpacity(0.7),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: textCtrl,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    hintText: '粘贴联系人列表...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+
+    final text = textCtrl.text;
+    textCtrl.dispose();
+
+    final lines = text.split('\n');
+    int imported = 0;
+    int skipped = 0;
+    for (final line in lines) {
+      final parsed = _parseLine(line);
+      if (parsed == null) {
+        if (line.trim().isNotEmpty) skipped++;
+        continue;
+      }
+      final (name, email) = parsed;
+      // 去重：邮箱已存在则跳过
+      final exists = ContactStore.cached.any((c) => c.email == email);
+      if (exists) {
+        skipped++;
+        continue;
+      }
+      await ContactStore.add(name: name, email: email);
+      imported++;
+    }
+
+    if (mounted) {
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('导入完成：成功 $imported 个'
+              '${skipped > 0 ? '，跳过 $skipped 个（格式无效或重复）' : ''}'),
+        ),
+      );
+    }
+  }
+
+  /// 从文件导入（vCard .vcf 或 CSV .csv）
+  Future<void> _importFromFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['vcf', 'csv'],
+        withData: true,
+      );
+      if (result == null || result.files.single.bytes == null) return;
+
+      final file = result.files.single;
+      final content = String.fromCharCodes(file.bytes!);
+      int imported = 0;
+
+      if (file.extension?.toLowerCase() == 'vcf') {
+        imported = _parseVCard(content);
+      } else if (file.extension?.toLowerCase() == 'csv') {
+        imported = _parseCsv(content);
+      }
+
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('从文件导入完成：成功 $imported 个联系人')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e')),
+        );
+      }
+    }
+  }
+
+  /// 解析 vCard 内容，返回导入数量
+  int _parseVCard(String content) {
+    final cards = RegExp(r'BEGIN:VCARD[\s\S]*?END:VCARD', caseSensitive: false)
+        .allMatches(content);
+    int count = 0;
+    for (final cardMatch in cards) {
+      final card = cardMatch.group(0)!;
+      String? name, email;
+      // FN:全名
+      final fnMatch = RegExp(r'^FN:(.+)$', multiLine: true).firstMatch(card);
+      if (fnMatch != null) name = fnMatch.group(1)!.trim();
+      // EMAIL
+      final emailMatch =
+          RegExp(r'^EMAIL[^:]*:(.+)$', multiLine: true).firstMatch(card);
+      if (emailMatch != null) email = emailMatch.group(1)!.trim();
+      // 如果没有 FN，尝试 N:姓;名
+      if (name == null || name.isEmpty) {
+        final nMatch = RegExp(r'^N:([^;]*);([^\r\n]*)', multiLine: true)
+            .firstMatch(card);
+        if (nMatch != null) {
+          final last = nMatch.group(1)?.trim() ?? '';
+          final first = nMatch.group(2)?.trim() ?? '';
+          name = '$last$first'.trim();
+        }
+      }
+      if (email == null || email.isEmpty) continue;
+      if (name == null || name.isEmpty) name = email.split('@').first;
+      // 去重
+      final exists = ContactStore.cached.any((c) => c.email == email);
+      if (exists) continue;
+      ContactStore.add(name: name, email: email);
+      count++;
+    }
+    return count;
+  }
+
+  /// 解析 CSV 内容，返回导入数量
+  int _parseCsv(String content) {
+    final lines = content.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
+    if (lines.isEmpty) return 0;
+    final separator = content.contains(';') && !content.contains(',')
+        ? ';'
+        : ',';
+    // 解析表头，找 name 和 email 列
+    final header = lines.first.split(separator).map((s) => s.trim().toLowerCase()).toList();
+    int nameIdx = header.indexWhere((h) =>
+        h.contains('name') || h.contains('姓名') || h.contains('display'));
+    int emailIdx = header.indexWhere((h) =>
+        h.contains('email') || h.contains('邮箱') || h.contains('mail'));
+
+    int count = 0;
+    // 如果有表头，从第二行开始；否则尝试每行解析
+    final dataLines = (nameIdx >= 0 && emailIdx >= 0) ? lines.sublist(1) : lines;
+    for (final line in dataLines) {
+      String? name;
+      String? email;
+      if (nameIdx >= 0 && emailIdx >= 0) {
+        final cols = line.split(separator);
+        if (emailIdx < cols.length) email = cols[emailIdx].trim();
+        if (nameIdx < cols.length) name = cols[nameIdx].trim();
+      } else {
+        // 无表头，尝试直接解析
+        final parsed = _parseLine(line);
+        if (parsed != null) {
+          name = parsed.$1;
+          email = parsed.$2;
+        }
+      }
+      if (email == null || email.isEmpty) continue;
+      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) continue;
+      if (name == null || name.isEmpty) name = email.split('@').first;
+      final exists = ContactStore.cached.any((c) => c.email == email);
+      if (exists) continue;
+      ContactStore.add(name: name, email: email);
+      count++;
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -438,6 +696,36 @@ class _ContactsScreenState extends State<ContactsScreen> {
               )
             : const Text('联系人'),
         actions: [
+          // 快速导入菜单
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.import_contacts_outlined),
+            tooltip: '快速导入',
+            onSelected: (value) {
+              if (value == 'text') {
+                _importFromText();
+              } else if (value == 'file') {
+                _importFromFile();
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'text',
+                child: Row(children: [
+                  Icon(Icons.edit_note, size: 20),
+                  SizedBox(width: 8),
+                  Text('批量粘贴导入'),
+                ]),
+              ),
+              const PopupMenuItem(
+                value: 'file',
+                child: Row(children: [
+                  Icon(Icons.file_upload_outlined, size: 20),
+                  SizedBox(width: 8),
+                  Text('从文件导入 (vCard/CSV)'),
+                ]),
+              ),
+            ],
+          ),
           IconButton(
             icon: Icon(_searching ? Icons.close : Icons.search),
             onPressed: _toggleSearch,
