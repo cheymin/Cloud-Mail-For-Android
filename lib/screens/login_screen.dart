@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen>
       final password = _passwordController.text;
 
       final api = CloudMailApi(baseUrl);
-      final response = await api.genToken(email, password);
+      final response = await api.login(email, password);
 
       if (response.isSuccess && response.data != null) {
         final token = response.data!;

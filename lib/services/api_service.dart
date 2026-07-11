@@ -52,17 +52,20 @@ class CloudMailApi {
     }
   }
 
-  Future<ApiResponse<String>> genToken(String email, String password) async {
+  /// 登录 — POST /api/login，返回 JWT token
+  /// 注意: 这是普通用户登录接口，不是 /api/public/genToken（那个是管理员生成 publicToken 用的）
+  Future<ApiResponse<String>> login(String email, String password) async {
     final response = await http.post(
-      Uri.parse(_url('/api/public/genToken')),
+      Uri.parse(_url('/api/login')),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
     );
     return _parseResponse<String>(response, (data) => data['token'] as String);
   }
 
-  /// 查询邮件列表 — 使用官方公开 API POST /api/public/emailList
-  /// 官方参数: toEmail, sendName, sendEmail, subject, content, timeSort, type, isDel, num(页码), size
+  /// 查询邮件列表 — GET /api/email/list（内部路由，需 JWT）
+  /// 参数: emailId(游标), type, accountId, size, timeSort, allReceive
+  /// 返回: {list: [...], total, latestEmail}
   Future<ApiResponse<EmailListResult>> getEmailList({
     int? accountId,
     int type = 0,
@@ -78,45 +81,44 @@ class CloudMailApi {
     int? isDel,
     int page = 1,
   }) async {
-    final body = <String, dynamic>{
-      'type': type,
-      'size': size,
-      'timeSort': timeSort,
-      'num': page, // 官方 API 用 num 表示页码
-    };
-    if (toEmail != null && toEmail.isNotEmpty) body['toEmail'] = toEmail;
-    if (sendName != null && sendName.isNotEmpty) body['sendName'] = sendName;
-    if (sendEmail != null && sendEmail.isNotEmpty) body['sendEmail'] = sendEmail;
-    if (subject != null && subject.isNotEmpty) body['subject'] = subject;
-    if (content != null && content.isNotEmpty) body['content'] = content;
-    if (isDel != null) body['isDel'] = isDel;
+    final params = <String, String>{};
+    if (accountId != null) params['accountId'] = accountId.toString();
+    params['type'] = type.toString();
+    params['size'] = size.toString();
+    if (emailId != null) params['emailId'] = emailId.toString();
+    params['timeSort'] = timeSort.toString();
+    if (allReceive != null) params['allReceive'] = allReceive.toString();
 
-    final response = await http.post(
-      Uri.parse(_url('/api/public/emailList')),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
+    final uri = Uri.parse(_url('/email/list')).replace(queryParameters: params);
+    final response = await http.get(uri, headers: _headers);
 
     return _parseResponse<EmailListResult>(response, (data) {
-      // 官方 API 返回数组，兼容内部 API 返回对象
-      List<Email> list;
-      if (data is List) {
-        list = data
-            .map((e) => Email.fromJson(e as Map<String, dynamic>))
-            .toList();
-      } else if (data is Map<String, dynamic>) {
+      // 内部 API 返回 {list: [...], total, latestEmail}
+      if (data is Map<String, dynamic>) {
         final rawList = data['list'] as List? ?? [];
-        list = rawList
+        final list = rawList
             .map((e) => Email.fromJson(e as Map<String, dynamic>))
             .toList();
-      } else {
-        list = [];
+        return EmailListResult(
+          list: list,
+          total: data['total'] ?? list.length,
+          latestEmail: data['latestEmail'] != null
+              ? Email.fromJson(data['latestEmail'] as Map<String, dynamic>)
+              : (list.isNotEmpty ? list.first : null),
+        );
       }
-      return EmailListResult(
-        list: list,
-        total: list.length,
-        latestEmail: list.isNotEmpty ? list.first : null,
-      );
+      // 兼容直接返回数组的情况
+      if (data is List) {
+        final list = data
+            .map((e) => Email.fromJson(e as Map<String, dynamic>))
+            .toList();
+        return EmailListResult(
+          list: list,
+          total: list.length,
+          latestEmail: list.isNotEmpty ? list.first : null,
+        );
+      }
+      return EmailListResult(list: [], total: 0, latestEmail: null);
     });
   }
 
@@ -236,6 +238,13 @@ class CloudMailApi {
     final response = await http.get(uri, headers: _headers);
 
     return _parseResponse<List<Email>>(response, (data) {
+      // star/list 返回 {list: [...]}
+      if (data is Map<String, dynamic>) {
+        final rawList = data['list'] as List? ?? [];
+        return rawList
+            .map((e) => Email.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
       if (data is List) {
         return data.map((e) => Email.fromJson(e as Map<String, dynamic>)).toList();
       }

@@ -66,12 +66,18 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   Future<void> _toggleStar() async {
     setState(() => _loading = true);
     try {
-      if (_isStarred) {
-        await widget.api.cancelStar(_email.emailId);
+      final response = _isStarred
+          ? await widget.api.cancelStar(_email.emailId)
+          : await widget.api.addStar(_email.emailId);
+      if (response.isSuccess) {
+        setState(() => _isStarred = !_isStarred);
       } else {
-        await widget.api.addStar(_email.emailId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('星标操作失败: ${response.message}')),
+          );
+        }
       }
-      setState(() => _isStarred = !_isStarred);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,12 +111,20 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     if (confirmed != true) return;
 
     try {
-      await widget.api.deleteEmails(_email.emailId.toString());
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('邮件已删除，回收站见~')),
-        );
+      final response = await widget.api.deleteEmails(_email.emailId.toString());
+      if (response.isSuccess) {
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('邮件已删除，回收站见~')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除失败: ${response.message}')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
