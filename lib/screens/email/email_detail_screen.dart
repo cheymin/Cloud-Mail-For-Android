@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
 import '../../utils/storage.dart';
+import '../../utils/theme.dart';
 
 class EmailDetailScreen extends StatefulWidget {
   final Email email;
