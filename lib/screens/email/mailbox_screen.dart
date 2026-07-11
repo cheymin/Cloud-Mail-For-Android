@@ -414,37 +414,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final isGoogle = themeProvider.isGoogle;
     final hasBg = themeProvider.hasCustomBackground;
 
-    return Scaffold(
-      key: _scaffoldKey,
-      // 自定义背景图：用 Stack 叠加，内容半透明以衬托毛玻璃效果
-      body: hasBg && themeProvider.customBackgroundImage != null
-          ? Stack(
-              children: [
-                // 背景图铺满
-                Positioned.fill(
-                  child: Image.file(
-                    File(themeProvider.customBackgroundImage!),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-                // 前景内容
-                _buildBody(isDark, isGoogle, cs, themeProvider),
-              ],
-            )
-          : _buildBody(isDark, isGoogle, cs, themeProvider),
-      drawer: _buildDrawer(isDark, isGoogle),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openCompose,
-        tooltip: '写邮件',
-        child: const Icon(Icons.edit_outlined),
-      ),
-    );
-  }
-
-  Widget _buildBody(
-      bool isDark, bool isGoogle, ColorScheme cs, ThemeProvider themeProvider) {
-    return SafeArea(
+    final content = SafeArea(
       child: Column(
         children: [
           // 毛玻璃顶部导航栏
@@ -457,50 +427,73 @@ class _MailboxScreenState extends State<MailboxScreen> {
                 ? _buildGoogleAppBar(isDark)
                 : _buildAppleAppBar(isDark),
           ),
-            // 静默刷新指示条：缓存已显示，正在拉取最新数据
-            if (_silentRefreshing)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                color: cs.primaryContainer.withOpacity(0.4),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.8,
-                        valueColor:
-                            AlwaysStoppedAnimation(cs.primary),
-                      ),
+          // 静默刷新指示条：缓存已显示，正在拉取最新数据
+          if (_silentRefreshing)
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: cs.primaryContainer.withOpacity(0.4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.8,
+                      valueColor: AlwaysStoppedAnimation(cs.primary),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      '正在获取最新邮件…',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onPrimaryContainer,
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '正在获取最新邮件…',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onPrimaryContainer,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            Expanded(
-              child: _loading
-                  ? _buildLoadingList(isGoogle)
-                  : _filteredEmails.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: _onRefresh,
-                          color: Theme.of(context).colorScheme.primary,
-                          child: isGoogle
-                              ? _buildGoogleEmailList()
-                              : _buildAppleEmailList(),
-                        ),
             ),
-          ],
-        ),
+          Expanded(
+            child: _loading
+                ? _buildLoadingList(isGoogle)
+                : _filteredEmails.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: _onRefresh,
+                        color: Theme.of(context).colorScheme.primary,
+                        child: isGoogle
+                            ? _buildGoogleEmailList()
+                            : _buildAppleEmailList(),
+                      ),
+          ),
+        ],
+      ),
+    );
+
+    return Scaffold(
+      key: _scaffoldKey,
+      // 自定义背景图：用 Stack 叠加，内容半透明以衬托毛玻璃效果
+      body: hasBg && themeProvider.customBackgroundImage != null
+          ? Stack(
+              children: [
+                Positioned.fill(
+                  child: Image.file(
+                    File(themeProvider.customBackgroundImage!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+                content,
+              ],
+            )
+          : content,
+      drawer: _buildDrawer(isDark, isGoogle),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCompose,
+        tooltip: '写邮件',
+        child: const Icon(Icons.edit_outlined),
       ),
     );
   }
