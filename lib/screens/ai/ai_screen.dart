@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
 import '../../services/ai_service.dart';
-import '../../utils/storage.dart';
 
 class AiScreen extends StatefulWidget {
   final CloudMailApi api;
@@ -23,11 +22,16 @@ class _AiScreenState extends State<AiScreen> {
   List<Email> _emails = [];
   bool _loadingEmails = false;
 
+  ChatConversation? _currentConversation;
+
+  static const _welcomeMessage =
+      '👋 你好！我是你的智能邮件助手。\n\n我可以帮你：\n• 分析邮件内容\n• 总结最近的邮件\n• 回复、转发、删除邮件\n• 标星重要邮件\n\n请输入你的问题或指令吧！';
+
   @override
   void initState() {
     super.initState();
     _loadEmails();
-    _addWelcomeMessage();
+    _loadOrCreateConversation();
   }
 
   @override
@@ -37,18 +41,62 @@ class _AiScreenState extends State<AiScreen> {
     super.dispose();
   }
 
-  void _addWelcomeMessage() {
-    _messages.add({
-      'role': 'assistant',
-      'content': '👋 你好！我是你的智能邮件助手。\n\n我可以帮你：\n• 分析邮件内容\n• 总结最近的邮件\n• 回复、转发、删除邮件\n• 标星重要邮件\n\n请输入你的问题或指令吧！',
-    });
+  /// 加载最近的对话，没有则新建
+  void _loadOrCreateConversation() {
+    final conversations = AiService.loadAllConversations();
+    if (conversations.isNotEmpty) {
+      _currentConversation = conversations.first;
+      _messages = List.from(_currentConversation!.messages);
+      // 如果对话为空，加欢迎语
+      if (_messages.isEmpty) {
+        _messages.add({'role': 'assistant', 'content': _welcomeMessage});
+      }
+    } else {
+      _startNewConversation();
+    }
+  }
+
+  /// 开始新对话
+  void _startNewConversation() {
+    _currentConversation = ChatConversation.createNew();
+    _messages = [
+      {'role': 'assistant', 'content': _welcomeMessage}
+    ];
+    setState(() {});
+  }
+
+  /// 保存当前对话到本地
+  void _saveCurrentConversation() {
+    if (_currentConversation == null) return;
+
+    // 过滤掉欢迎语，不保存
+    final messagesToSave = _messages
+        .where((m) => !(m['role'] == 'assistant' &&
+            m['content']!.startsWith('👋')))
+        .toList();
+
+    if (messagesToSave.isEmpty) return;
+
+    // 如果标题还是"新对话"，用第一条用户消息作为标题
+    if (_currentConversation!.title == '新对话') {
+      final firstUserMsg = messagesToSave.firstWhere(
+        (m) => m['role'] == 'user',
+        orElse: () => {'content': '新对话'},
+      );
+      String title = firstUserMsg['content'] ?? '新对话';
+      if (title.length > 30) title = '${title.substring(0, 30)}...';
+      _currentConversation!.title = title;
+    }
+
+    _currentConversation!.messages = messagesToSave;
+    _currentConversation!.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    AiService.saveConversation(_currentConversation!);
   }
 
   Future<void> _loadEmails() async {
     setState(() => _loadingEmails = true);
     try {
       final response = await widget.api.getEmailList(
-        accountId: StorageService.currentAccountId,
         type: 0,
         size: 10,
       );
@@ -102,6 +150,8 @@ class _AiScreenState extends State<AiScreen> {
         });
       });
     } finally {
+      // 保存对话到本地
+      _saveCurrentConversation();
       setState(() => _loading = false);
       _scrollToBottom();
     }
@@ -117,6 +167,187 @@ class _AiScreenState extends State<AiScreen> {
         );
       }
     });
+  }
+
+  /// 打开历史对话列表
+  void _showHistory() {
+    final conversations = AiService.loadAllConversations();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '历史对话',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          if (conversations.isNotEmpty)
+                            TextButton.icon(
+                              icon: const Icon(Icons.delete_sweep, size: 18),
+                              label: const Text('清空'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (d) => AlertDialog(
+                                    title: const Text('清空所有对话？'),
+                                    content: const Text('确定要删除所有历史对话吗？此操作不可撤销。'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(d, false),
+                                        child: const Text('取消'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(d, true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                        child: const Text('清空'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  AiService.clearAllConversations();
+                                  setSheetState(() => conversations.clear());
+                                  if (mounted) {
+                                    _startNewConversation();
+                                  }
+                                }
+                              },
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            tooltip: '新对话',
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _startNewConversation();
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  if (conversations.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Text(
+                          '还没有历史对话',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: conversations.length,
+                        itemBuilder: (c, i) {
+                          final conv = conversations[i];
+                          final isSelected =
+                              _currentConversation?.id == conv.id;
+                          final dt = DateTime.fromMillisecondsSinceEpoch(
+              conv.updatedAt);
+                          final timeStr =
+                              '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                          final msgCount =
+                              conv.messages.where((m) => m['role'] == 'user').length;
+
+                          return ListTile(
+                            leading: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF6C63FF)
+                                    : const Color(0xFF6C63FF).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.chat_bubble_outline,
+                                color: isSelected
+                                    ? Colors.white
+                                    : const Color(0xFF6C63FF),
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              conv.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: isSelected
+                                    ? const Color(0xFF6C63FF)
+                                    : null,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '$timeStr · $msgCount 条消息',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 20, color: Colors.grey),
+                              onPressed: () {
+                                AiService.deleteConversation(conv.id);
+                                setSheetState(() {
+                                  conversations.removeAt(i);
+                                });
+                                if (isSelected) {
+                                  Navigator.pop(ctx);
+                                  _loadOrCreateConversation();
+                                  setState(() {});
+                                }
+                              },
+                            ),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _currentConversation = conv;
+                              _messages = [
+                                {'role': 'assistant', 'content': _welcomeMessage},
+                                ...conv.messages,
+                              ];
+                              setState(() {});
+                              _scrollToBottom();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildMessage(Map<String, String> message) {
@@ -191,7 +422,21 @@ class _AiScreenState extends State<AiScreen> {
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '历史对话',
+            onPressed: _showHistory,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_comment_outlined),
+            tooltip: '新对话',
+            onPressed: _startNewConversation,
+          ),
           if (_loadingEmails)
             const Padding(
               padding: EdgeInsets.all(12),

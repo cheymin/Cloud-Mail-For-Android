@@ -94,6 +94,16 @@ class StorageService {
     }
   }
 
+  // AI 对话历史（JSON 字符串）
+  static String? get chatHistory => _prefs?.getString('chatHistory');
+  static set chatHistory(String? value) {
+    if (value != null) {
+      _prefs?.setString('chatHistory', value);
+    } else {
+      _prefs?.remove('chatHistory');
+    }
+  }
+
   static void clear() {
     _prefs?.remove('token');
     _prefs?.remove('email');
