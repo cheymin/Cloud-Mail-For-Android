@@ -45,13 +45,27 @@ class _MailboxScreenState extends State<MailboxScreen> {
       final accResp = await widget.api.getAccountList();
       if (accResp.isSuccess && accResp.data != null) {
         final accounts = accResp.data!;
-        final currentId = StorageService.currentAccountId;
-        final exists = accounts.any((a) => a.accountId == currentId);
-        if (!exists && accounts.isNotEmpty) {
-          StorageService.currentAccountId = accounts.first.accountId;
+        if (accounts.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('暂无邮箱账户，请先添加账户')),
+            );
+          }
+        } else {
+          final currentId = StorageService.currentAccountId;
+          final exists = accounts.any((a) => a.accountId == currentId);
+          if (!exists) {
+            StorageService.currentAccountId = accounts.first.accountId;
+          }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载账户失败: ${ErrorMessages.fromException(e)}')),
+        );
+      }
+    }
     _loadEmails();
   }
 
