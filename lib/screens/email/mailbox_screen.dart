@@ -434,6 +434,11 @@ class _MailboxScreenState extends State<MailboxScreen> {
             )
           : _buildBody(isDark, isGoogle, cs, themeProvider),
       drawer: _buildDrawer(isDark, isGoogle),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCompose,
+        tooltip: '写邮件',
+        child: const Icon(Icons.edit_outlined),
+      ),
     );
   }
 
@@ -496,11 +501,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openCompose,
-        tooltip: '写邮件',
-        child: const Icon(Icons.edit_outlined),
       ),
     );
   }

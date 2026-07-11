@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 
 /// WebDAV 同步配置
 class WebDavConfig {
@@ -78,11 +76,11 @@ class WebDavService {
         : '/${config.remoteDir}';
     final url = '$_baseUrl$dir';
     try {
-      final res = await http.request(
-        'MKCOL',
-        Uri.parse(url),
-        headers: _auth,
-      );
+      final req = http.Request('MKCOL', Uri.parse(url));
+      req.headers.addAll(_auth);
+      final client = http.Client();
+      final res = await client.send(req);
+      client.close();
       // 201=创建成功，405=已存在，301=重定向（部分服务）
       return res.statusCode == 201 ||
           res.statusCode == 405 ||
@@ -135,17 +133,17 @@ class WebDavService {
   Future<bool> testConnection() async {
     if (!config.isConfigured) return false;
     try {
-      final res = await http.request(
-        'PROPFIND',
-        Uri.parse('$_baseUrl/'),
-        headers: {
-          ..._auth,
-          'Depth': '0',
-          'Content-Type': 'application/xml; charset=utf-8',
-        },
-        body: '<?xml version="1.0" encoding="utf-8"?>'
-            '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>',
-      );
+      final req = http.Request('PROPFIND', Uri.parse('$_baseUrl/'));
+      req.headers.addAll({
+        ..._auth,
+        'Depth': '0',
+        'Content-Type': 'application/xml; charset=utf-8',
+      });
+      req.body = '<?xml version="1.0" encoding="utf-8"?>'
+          '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>';
+      final client = http.Client();
+      final res = await client.send(req);
+      client.close();
       // 207 Multi-Status = 成功
       return res.statusCode == 207 || res.statusCode == 200;
     } catch (_) {

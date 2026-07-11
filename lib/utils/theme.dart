@@ -884,7 +884,6 @@ class AppTheme {
         primaryTextTheme: fontFamily == null
             ? null
             : _applyFontFamily(theme.primaryTextTheme, fontFamily),
-        fontFamily: fontFamily,
       );
     }
     return theme;
