@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
 import '../../utils/storage.dart';
+import '../../utils/theme.dart';
 
 class ComposeScreen extends StatefulWidget {
   final CloudMailApi api;
@@ -70,8 +71,8 @@ class _ComposeScreenState extends State<ComposeScreen> {
       if (response.isSuccess && response.data != null) {
         setState(() {
           _accounts = response.data!;
-          // 检查当前选中的账户是否还在列表中
-          final exists = _accounts.any((a) => a.accountId == _selectedAccountId);
+          final exists =
+              _accounts.any((a) => a.accountId == _selectedAccountId);
           if (!exists || _selectedAccountId == null) {
             if (_accounts.isNotEmpty) {
               _selectedAccountId = _accounts.first.accountId;
@@ -82,11 +83,11 @@ class _ComposeScreenState extends State<ComposeScreen> {
           }
         });
       } else {
-        // 显示具体错误，方便诊断
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('加载账户失败: ${response.message.isEmpty ? "服务器未返回数据" : response.message}'),
+              content: Text(
+                  '加载账户失败: ${response.message.isEmpty ? "服务器未返回数据" : response.message}'),
               duration: const Duration(seconds: 5),
             ),
           );
@@ -155,7 +156,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
   Future<void> _send() async {
     if (_toController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('收件人不能为空呀，不然发给谁呢~')),
+        const SnackBar(content: Text('收件人不能为空')),
       );
       return;
     }
@@ -163,16 +164,16 @@ class _ComposeScreenState extends State<ComposeScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('没有主题？'),
+          title: const Text('没有主题'),
           content: const Text('这封邮件没有主题，确定要发送吗？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('再想想'),
+              child: const Text('取消'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('就这么发'),
+              child: const Text('发送'),
             ),
           ],
         ),
@@ -214,7 +215,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
         if (mounted) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('发送成功！邮件已经飞走啦~ 🚀')),
+            const SnackBar(content: Text('发送成功')),
           );
         }
       } else {
@@ -236,237 +237,302 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final title = widget.replyEmail != null
+        ? '回复'
+        : widget.forwardEmail != null
+            ? '转发'
+            : '写邮件';
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(widget.replyEmail != null
-            ? '回复邮件'
-            : widget.forwardEmail != null
-                ? '转发邮件'
-                : '写邮件'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          if (!_sending)
-            IconButton(
-              icon: const Icon(Icons.send),
-              onPressed: _send,
-              tooltip: '发送',
-            )
-          else
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 顶部导航栏（Mimestream 风格：取消 + 标题 + 发送）
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  if (_sending)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _send,
+                      child: Text(
+                        '发送',
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+            // 邮件字段区
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outlineVariant, width: 0.5),
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 发件人选择
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text('发件人', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _loadingAccounts
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                )
-                              : _accounts.isEmpty
-                                  ? const Text('暂无可用账户', style: TextStyle(color: Colors.red))
-                                  : DropdownButton<int>(
-                                      value: _selectedAccountId,
-                                      isExpanded: true,
-                                      underline: const SizedBox(),
-                                      items: _accounts.map((acc) {
-                                        return DropdownMenuItem<int>(
-                                          value: acc.accountId,
+                  // 发件人（账户选择）
+                  _buildFieldRow(
+                    label: '发件人',
+                    child: _loadingAccounts
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2),
+                          )
+                        : _accounts.isEmpty
+                            ? Text(
+                                '暂无可用账户',
+                                style: TextStyle(
+                                    color: cs.error, fontSize: 14),
+                              )
+                            : DropdownButton<int>(
+                                value: _selectedAccountId,
+                                isExpanded: true,
+                                underline: const SizedBox(),
+                                style: TextStyle(
+                                    color: cs.onSurface, fontSize: 15),
+                                items: _accounts.map((acc) {
+                                  final color =
+                                      AppTheme.accountColor(acc.email);
+                                  return DropdownMenuItem<int>(
+                                    value: acc.accountId,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          margin: const EdgeInsets.only(
+                                              right: 8),
+                                          decoration: BoxDecoration(
+                                            color: color,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        Expanded(
                                           child: Text(
                                             acc.name.isNotEmpty
                                                 ? '${acc.name} <${acc.email}>'
                                                 : acc.email,
-                                            style: const TextStyle(fontSize: 14),
-                                            overflow: TextOverflow.ellipsis,
+                                            overflow:
+                                                TextOverflow.ellipsis,
                                           ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) {
-                                        setState(() {
-                                          _selectedAccountId = val;
-                                          if (val != null) {
-                                            StorageService.currentAccountId = val;
-                                          }
-                                        });
-                                      },
+                                        ),
+                                      ],
                                     ),
-                        ),
-                      ],
-                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedAccountId = val;
+                                    if (val != null) {
+                                      StorageService.currentAccountId = val;
+                                    }
+                                  });
+                                },
+                              ),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  _buildDivider(),
+                  // 收件人
+                  _buildFieldRow(
+                    label: '收件人',
                     child: TextField(
                       controller: _toController,
-                      decoration: const InputDecoration(
-                        labelText: '收件人',
-                        hintText: '输入邮箱地址，多个用逗号分隔',
+                      decoration: InputDecoration(
+                        hintText: '邮箱地址，多个用逗号分隔',
+                        hintStyle: TextStyle(
+                            color: cs.onSurfaceVariant.withOpacity(0.4),
+                            fontSize: 15),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
+                      style: TextStyle(color: cs.onSurface, fontSize: 15),
+                      keyboardType: TextInputType.emailAddress,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  _buildDivider(),
+                  // 主题
+                  _buildFieldRow(
+                    label: '主题',
                     child: TextField(
                       controller: _subjectController,
-                      decoration: const InputDecoration(
-                        labelText: '主题',
+                      decoration: InputDecoration(
+                        hintText: '邮件主题',
+                        hintStyle: TextStyle(
+                            color: cs.onSurfaceVariant.withOpacity(0.4),
+                            fontSize: 15),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_attachments.isNotEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF1E293B)
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (var i = 0; i < _attachments.length; i++)
-                            Chip(
-                              label: Text(
-                                _attachments[i]['filename'],
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              avatar: const Icon(Icons.attach_file, size: 16),
-                              deleteIcon: const Icon(Icons.close, size: 16),
-                              onDeleted: () => _removeAttachment(i),
-                            ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TextField(
-                      controller: _contentController,
-                      maxLines: null,
-                      minLines: 15,
-                      decoration: const InputDecoration(
-                        hintText: '开始写邮件吧...',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.all(16),
-                      ),
+                      style: TextStyle(color: cs.onSurface, fontSize: 15),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardTheme.color,
-                border: Border(
-                  top: BorderSide(
-                    color: isDark
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFE2E8F0),
-                  ),
+            // 附件列表
+            if (_attachments.isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < _attachments.length; i++)
+                      Chip(
+                        label: Text(
+                          _attachments[i]['filename'],
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        avatar: const Icon(Icons.attach_file, size: 16),
+                        deleteIcon: const Icon(Icons.close, size: 16),
+                        onDeleted: () => _removeAttachment(i),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
                 ),
               ),
+            // 正文区
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outlineVariant, width: 0.5),
+                ),
+                child: TextField(
+                  controller: _contentController,
+                  maxLines: null,
+                  expands: true,
+                  decoration: InputDecoration(
+                    hintText: '开始写邮件...',
+                    hintStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withOpacity(0.4),
+                        fontSize: 15),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  style: TextStyle(
+                      color: cs.onSurface, fontSize: 15, height: 1.5),
+                ),
+              ),
+            ),
+            // 底部工具栏
+            Container(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(
+                  top: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.image_outlined),
+                    icon: const Icon(Icons.image_outlined, size: 22),
+                    color: cs.primary,
                     onPressed: _pickImage,
                     tooltip: '添加图片',
                   ),
                   IconButton(
-                    icon: const Icon(Icons.attach_file),
+                    icon: const Icon(Icons.attach_file_rounded, size: 22),
+                    color: cs.primary,
                     onPressed: _pickFile,
                     tooltip: '添加附件',
-                  ),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.send, size: 18),
-                    label: Text(_sending ? '发送中...' : '发送'),
                   ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldRow({required String label, required Widget child}) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurfaceVariant.withOpacity(0.7),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
+          const SizedBox(width: 12),
+          Expanded(child: child),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 84),
+      child: Container(
+        height: 0.5,
+        color: cs.outlineVariant,
       ),
     );
   }
