@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/email.dart';
 import '../../services/api_service.dart';
 import '../../services/ai_service.dart';
+import '../../utils/storage.dart';
 
 class AiScreen extends StatefulWidget {
   final CloudMailApi api;
@@ -97,6 +98,7 @@ class _AiScreenState extends State<AiScreen> {
     setState(() => _loadingEmails = true);
     try {
       final response = await widget.api.getEmailList(
+        accountId: StorageService.currentAccountId,
         type: 0,
         size: 10,
       );

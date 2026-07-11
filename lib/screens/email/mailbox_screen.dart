@@ -27,8 +27,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
-  int? _lastEmailId; // 星标列表游标分页
-  int _currentPage = 1; // 普通邮件页码分页
+  int? _lastEmailId; // 游标分页（emailId）
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
@@ -58,6 +57,15 @@ class _MailboxScreenState extends State<MailboxScreen> {
           if (!exists) {
             StorageService.currentAccountId = accounts.first.accountId;
           }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('加载账户失败: ${accResp.message.isEmpty ? "未知错误" : accResp.message}'),
+              duration: const Duration(seconds: 5),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -156,7 +164,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       _loading = true;
       _emails = [];
       _lastEmailId = null;
-      _currentPage = 1;
       _hasMore = true;
     });
 
@@ -173,22 +180,22 @@ class _MailboxScreenState extends State<MailboxScreen> {
           });
         }
       } else {
+        // 内部 API 用 emailId 游标分页，垃圾箱 type 仍为 0，isDel=1
         final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
+          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
           timeSort: 0,
           isDel: isDel,
-          page: _currentPage,
-          subject:
-              _searching && _searchController.text.isNotEmpty
-                  ? '%${_searchController.text}%'
-                  : null,
         );
         if (response.isSuccess && response.data != null) {
           setState(() {
             _emails = response.data!.list;
             _hasMore = _emails.length >= 20;
+            if (_emails.isNotEmpty) {
+              _lastEmailId = _emails.last.emailId;
+            }
           });
         }
       }
@@ -223,23 +230,22 @@ class _MailboxScreenState extends State<MailboxScreen> {
           });
         }
       } else {
-        _currentPage++;
         final isDel = _currentFolder == MailFolder.trash ? 1 : null;
         final response = await widget.api.getEmailList(
+          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
+          emailId: _lastEmailId,
           timeSort: 0,
           isDel: isDel,
-          page: _currentPage,
-          subject:
-              _searching && _searchController.text.isNotEmpty
-                  ? '%${_searchController.text}%'
-                  : null,
         );
         if (response.isSuccess && response.data != null) {
           setState(() {
             _emails.addAll(response.data!.list);
             _hasMore = response.data!.list.length >= 20;
+            if (response.data!.list.isNotEmpty) {
+              _lastEmailId = response.data!.list.last.emailId;
+            }
           });
         }
       }

@@ -81,6 +81,16 @@ class _ComposeScreenState extends State<ComposeScreen> {
             }
           }
         });
+      } else {
+        // 显示具体错误，方便诊断
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('加载账户失败: ${response.message.isEmpty ? "服务器未返回数据" : response.message}'),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
