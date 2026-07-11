@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_mail_app/utils/storage.dart';
-import 'package:cloud_mail_app/screens/login_screen.dart';
-import 'package:cloud_mail_app/screens/email_list_screen.dart';
-import 'package:cloud_mail_app/services/api_service.dart';
+import 'package:provider/provider.dart';
+import 'utils/storage.dart';
+import 'utils/theme.dart';
+import 'services/api_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/email/mailbox_screen.dart';
+import 'screens/email/email_detail_screen.dart';
+import 'screens/email/compose_screen.dart';
+import 'screens/settings/settings_screen.dart';
+import 'screens/accounts/account_screen.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await StorageService.init();
-
-  runApp(const CloudMailApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider()..init(),
+      child: const CloudMailApp(),
+    ),
+  );
 }
 
 class CloudMailApp extends StatelessWidget {
@@ -16,49 +26,55 @@ class CloudMailApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasToken = StorageService.token != null &&
-        StorageService.token!.isNotEmpty;
-    final hasBaseUrl = StorageService.baseUrl != null &&
-        StorageService.baseUrl!.isNotEmpty;
-
-    Widget home;
-    if (hasToken && hasBaseUrl) {
-      final api = CloudMailApi(StorageService.baseUrl!);
-      api.token = StorageService.token;
-      home = EmailListScreen(api: api);
-    } else {
-      home = const LoginScreen();
-    }
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return MaterialApp(
       title: 'Cloud Mail',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: Colors.grey.shade50,
-        fontFamily: 'Roboto',
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: Color(0xFF1A1A2E),
-          centerTitle: false,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6C63FF),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ),
-      home: home,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeProvider.themeMode,
+      home: const _AuthChecker(),
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/compose':
+            final args = settings.arguments as Map<String, dynamic>?;
+            return MaterialPageRoute(
+              builder: (ctx) => ComposeScreen(
+                api: args?['api'] as CloudMailApi,
+                replyEmail: args?['replyEmail'],
+                forwardEmail: args?['forwardEmail'],
+              ),
+            );
+          case '/detail':
+            final args = settings.arguments as Map<String, dynamic>?;
+            return MaterialPageRoute(
+              builder: (ctx) => EmailDetailScreen(
+                email: args?['email'],
+                api: args?['api'] as CloudMailApi,
+              ),
+            );
+          default:
+            return null;
+        }
+      },
     );
+  }
+}
+
+class _AuthChecker extends StatelessWidget {
+  const _AuthChecker();
+
+  @override
+  Widget build(BuildContext context) {
+    final token = StorageService.token;
+    final baseUrl = StorageService.baseUrl;
+
+    if (token != null && baseUrl != null && token.isNotEmpty && baseUrl.isNotEmpty) {
+      final api = CloudMailApi(baseUrl, token: token);
+      return MailboxScreen(api: api);
+    }
+
+    return const LoginScreen();
   }
 }
