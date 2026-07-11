@@ -744,7 +744,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
+                color: cs.surfaceVariant,
                 shape: BoxShape.circle,
               ),
             ),
@@ -757,7 +757,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     height: 14,
                     width: 120,
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
+                      color: cs.surfaceVariant,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -766,7 +766,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     height: 12,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
+                      color: cs.surfaceVariant,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -775,7 +775,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     height: 12,
                     width: 200,
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
+                      color: cs.surfaceVariant,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
