@@ -16,6 +16,10 @@ class CloudMailApi {
     if (!path.startsWith('/')) {
       path = '/$path';
     }
+    // 所有 API 都在 /api 下
+    if (!path.startsWith('/api')) {
+      path = '/api$path';
+    }
     return '$url$path';
   }
 
