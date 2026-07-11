@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
+import '../../services/ai_service.dart';
 import '../../services/update_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
@@ -22,6 +23,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _checkingUpdate = false;
   final _apiKeyController = TextEditingController();
   final _baseUrlController = TextEditingController();
+  List<String> _models = [];
+  String? _selectedModel;
+  bool _loadingModels = false;
 
   @override
   void initState() {
@@ -30,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _autoLoadImages = StorageService.autoLoadImages;
     _apiKeyController.text = StorageService.openaiApiKey ?? '';
     _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
+    _selectedModel = StorageService.openaiModel;
   }
 
   @override
@@ -39,10 +44,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
+  Future<void> _fetchModels() async {
+    // 先保存当前配置，再用最新配置请求
+    StorageService.openaiApiKey = _apiKeyController.text.trim().isEmpty ? null : _apiKeyController.text.trim();
+    StorageService.openaiBaseUrl = _baseUrlController.text.trim().isEmpty ? null : _baseUrlController.text.trim();
+
+    setState(() => _loadingModels = true);
+    try {
+      final service = AiService();
+      final models = await service.fetchModels();
+      setState(() {
+        _models = models;
+        // 如果当前选中的模型不在列表里，清空选择
+        if (_selectedModel != null && !models.contains(_selectedModel)) {
+          _selectedModel = null;
+        }
+      });
+      if (models.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('上游没有返回可用模型')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('获取模型失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingModels = false);
+    }
+  }
+
+  void _showModelPicker() async {
+    if (_models.isEmpty) {
+      await _fetchModels();
+    }
+    if (!mounted || _models.isEmpty) return;
+
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('选择模型'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _models.length,
+            itemBuilder: (c, i) {
+              final m = _models[i];
+              return ListTile(
+                title: Text(m),
+                trailing: _selectedModel == m
+                    ? const Icon(Icons.check, color: Color(0xFF6C63FF))
+                    : null,
+                onTap: () => Navigator.pop(ctx, m),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+
+    if (picked != null) {
+      setState(() => _selectedModel = picked);
+      StorageService.openaiModel = picked;
+    }
+  }
+
   Future<void> _checkUpdate() async {
     setState(() => _checkingUpdate = true);
     try {
-      final updateInfo = await UpdateService.checkUpdate('2.1.3');
+      final updateInfo = await UpdateService.checkUpdate('2.2.0');
       setState(() => _checkingUpdate = false);
 
       if (updateInfo?.hasUpdate == true) {
@@ -220,7 +301,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.update_outlined,
                   title: '检查更新',
-                  subtitle: '当前版本: 2.1.3',
+                  subtitle: '当前版本: 2.2.0',
                   onTap: _checkingUpdate ? null : _checkUpdate,
                   trailing: _checkingUpdate
                       ? const SizedBox(
@@ -292,12 +373,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: FilledButton(
-                    onPressed: _saveOpenAIConfig,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(44),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _saveOpenAIConfig,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(44),
+                          ),
+                          child: const Text('保存配置'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: _loadingModels ? null : _fetchModels,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                        ),
+                        icon: _loadingModels
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.cloud_download_outlined),
+                        label: const Text('拉取模型'),
+                      ),
+                    ],
+                  ),
+                ),
+                // 模型选择
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: InkWell(
+                    onTap: _showModelPicker,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.model_training_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          const Text('模型', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedModel ?? '点击选择模型',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _selectedModel == null ? Colors.grey : null,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                        ],
+                      ),
                     ),
-                    child: const Text('保存配置'),
                   ),
                 ),
               ],

@@ -7,17 +7,46 @@ import '../utils/storage.dart';
 class AiService {
   String? _apiKey;
   String? _baseUrl;
+  String? _model;
 
-  AiService({String? apiKey, String? baseUrl}) {
+  AiService({String? apiKey, String? baseUrl, String? model}) {
     _apiKey = apiKey ?? StorageService.openaiApiKey;
     _baseUrl = (baseUrl ?? StorageService.openaiBaseUrl)?.trim() ??
         'https://api.openai.com/v1';
     if (!_baseUrl!.endsWith('/')) {
       _baseUrl = '$_baseUrl/';
     }
+    _model = model ?? StorageService.openaiModel ?? 'gpt-4o-mini';
   }
 
   bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
+  String get model => _model ?? 'gpt-4o-mini';
+
+  /// 从上游获取可用模型列表
+  Future<List<String>> fetchModels() async {
+    if (!isConfigured) {
+      throw Exception('请先配置 API Key');
+    }
+    final url = '${_baseUrl}models';
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $_apiKey',
+      },
+    );
+    if (response.statusCode == 200) {
+      final json = jsonDecode(utf8.decode(response.bodyBytes));
+      final data = json['data'] as List;
+      final models = data
+          .map((e) => e['id'] as String)
+          .where((id) => id.isNotEmpty)
+          .toList();
+      models.sort();
+      return models;
+    } else {
+      throw Exception('获取模型列表失败: ${response.statusCode}');
+    }
+  }
 
   Future<String> analyzeEmail(Email email) async {
     final prompt = '''分析以下邮件内容，提供摘要、重要信息提取和回复建议：
@@ -198,7 +227,7 @@ $emailListStr
 
     final url = '${_baseUrl}chat/completions';
     final body = jsonEncode({
-      'model': 'gpt-4o-mini',
+      'model': _model,
       'messages': messages,
       'max_tokens': 2000,
       'temperature': 0.7,

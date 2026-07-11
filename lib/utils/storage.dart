@@ -76,6 +76,15 @@ class StorageService {
     }
   }
 
+  static String? get openaiModel => _prefs?.getString('openaiModel');
+  static set openaiModel(String? value) {
+    if (value != null) {
+      _prefs?.setString('openaiModel', value);
+    } else {
+      _prefs?.remove('openaiModel');
+    }
+  }
+
   static String? get lastCheckUpdateTime => _prefs?.getString('lastCheckUpdateTime');
   static set lastCheckUpdateTime(String? value) {
     if (value != null) {
