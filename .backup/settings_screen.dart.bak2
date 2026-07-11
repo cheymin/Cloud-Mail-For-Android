@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
@@ -9,8 +8,9 @@ import '../../utils/theme.dart';
 import '../login_screen.dart';
 import '../update/update_screen.dart';
 
-/// 应用当前版本（运行时从 package_info_plus 动态读取，与 pubspec.yaml 自动同步）
-// 实例字段在 _SettingsScreenState 里维护，这里仅作默认值占位
+/// 应用当前版本（与 pubspec.yaml 保持同步）
+const String _appVersion = '4.0.0';
+
 class SettingsScreen extends StatefulWidget {
   final CloudMailApi api;
 
@@ -28,8 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _models = [];
   String? _selectedModel;
   bool _loadingModels = false;
-  // 应用当前版本（运行时从 package_info_plus 动态读取）
-  String _appVersion = '4.1.0';
 
   @override
   void initState() {
@@ -39,21 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _apiKeyController.text = StorageService.openaiApiKey ?? '';
     _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
     _selectedModel = StorageService.openaiModel;
-    _loadAppVersion();
-  }
-
-  /// 从 package_info_plus 动态读取版本号，与 pubspec.yaml 自动同步
-  Future<void> _loadAppVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      // version 形如 "4.1.0"，buildNumber 形如 "15"
-      final ver = info.version;
-      if (ver.isNotEmpty && mounted) {
-        setState(() => _appVersion = ver);
-      }
-    } catch (_) {
-      // 读取失败时保留默认值
-    }
   }
 
   @override
@@ -166,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (ctx) => UpdateScreen(currentVersion: _appVersion),
+        builder: (ctx) => const UpdateScreen(currentVersion: _appVersion),
       ),
     );
   }

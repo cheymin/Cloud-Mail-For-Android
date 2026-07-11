@@ -114,17 +114,16 @@ class _MailboxScreenState extends State<MailboxScreen> {
   /// 当前文件夹用于缓存的 key
   String get _cacheKey => _currentFolder.name;
 
-  /// 「全部邮件」文件夹跨账户汇总所有收到邮件
+  /// 「全部邮件」文件夹不绑定具体账户，跨账户汇总所有收到邮件
   bool get _isAllFolder => _currentFolder == MailFolder.all;
 
   /// 加载邮件时是否使用 allReceive=1
-  /// 「全部邮件」模式下传 allReceive=1，让后端聚合所有账户的收件
   int? get _allReceive => _isAllFolder ? 1 : null;
 
   /// 当前文件夹加载邮件时使用的 accountId
-  /// 即便是「全部邮件」，也传当前账户 accountId（后端需要 JWT 上下文），
-  /// 配合 allReceive=1 聚合该用户名下所有账户的邮件
-  int? get _queryAccountId => StorageService.currentAccountId;
+  /// 「全部邮件」不传 accountId
+  int? get _queryAccountId =>
+      _isAllFolder ? null : StorageService.currentAccountId;
 
   String _formatTime(String timeStr) {
     try {

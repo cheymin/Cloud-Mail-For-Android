@@ -59,51 +59,12 @@ class AiService {
 
   AiService({String? apiKey, String? baseUrl, String? model}) {
     _apiKey = apiKey ?? StorageService.openaiApiKey;
-    _baseUrl = _normalizeBaseUrl(baseUrl ?? StorageService.openaiBaseUrl);
+    _baseUrl = (baseUrl ?? StorageService.openaiBaseUrl)?.trim() ??
+        'https://api.openai.com/v1';
+    if (!_baseUrl!.endsWith('/')) {
+      _baseUrl = '$_baseUrl/';
+    }
     _model = model ?? StorageService.openaiModel ?? 'gpt-4o-mini';
-  }
-
-  /// 规范化 baseUrl，兼容用户各种填法：
-  /// - 去掉首尾空白
-  /// - 去掉尾部斜杠
-  /// - 去掉多余的 endpoint 后缀（/chat/completions、/models 等）
-  /// - 若不含 /v1（或 /v2 等版本段）且不是 IP/localhost 直连，自动补 /v1
-  /// 最终形如：https://api.openai.com/v1（无尾斜杠）
-  static String _normalizeBaseUrl(String? raw) {
-    var s = (raw ?? '').trim();
-    if (s.isEmpty) return 'https://api.openai.com/v1';
-
-    // 去掉尾部斜杠
-    while (s.endsWith('/')) {
-      s = s.substring(0, s.length - 1);
-    }
-
-    // 去掉用户误填的 endpoint 后缀
-    for (final suffix in [
-      '/chat/completions',
-      '/completions',
-      '/models',
-      '/embeddings',
-      '/chat',
-    ]) {
-      if (s.toLowerCase().endsWith(suffix.toLowerCase())) {
-        s = s.substring(0, s.length - suffix.length);
-      }
-    }
-    // 再次去尾斜杠（去后缀后可能露出斜杠）
-    while (s.endsWith('/')) {
-      s = s.substring(0, s.length - 1);
-    }
-
-    // 若未含版本段（/v1、/v2 ...），且不是 localhost/IP 直连形式，自动补 /v1
-    final hasVersionSeg = RegExp(r'/v\d+$').hasMatch(s);
-    final isBareHost =
-        RegExp(r'(localhost|127\.0\.0\.1|:\d+)$').hasMatch(s);
-    if (!hasVersionSeg && !isBareHost) {
-      s = '$s/v1';
-    }
-
-    return s;
   }
 
   bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
@@ -154,14 +115,11 @@ class AiService {
   }
 
   /// 从上游获取可用模型列表
-  ///
-  /// 请求 GET {baseUrl}/models，兼容 OpenAI 及其兼容网关。
-  /// 失败时抛出带详细信息的异常（状态码 + 响应体片段）。
   Future<List<String>> fetchModels() async {
     if (!isConfigured) {
       throw Exception('请先配置 API Key');
     }
-    final url = '$_baseUrl/models';
+    final url = '${_baseUrl}models';
     final response = await http.get(
       Uri.parse(url),
       headers: {
@@ -178,11 +136,7 @@ class AiService {
       models.sort();
       return models;
     } else {
-      // 带上响应体，方便用户排查（401 key错 / 404 路径错 / 其他）
-      final body = utf8.decode(response.bodyBytes);
-      final snippet = body.length > 300 ? '${body.substring(0, 300)}...' : body;
-      throw Exception(
-          '获取模型列表失败 (HTTP ${response.statusCode})\n$url\n$snippet');
+      throw Exception('获取模型列表失败: ${response.statusCode}');
     }
   }
 
@@ -390,7 +344,7 @@ $emailListStr
       return '请先在设置中配置 OpenAI API Key';
     }
 
-    final url = '$_baseUrl/chat/completions';
+    final url = '${_baseUrl}chat/completions';
     final body = jsonEncode({
       'model': _model,
       'messages': messages,

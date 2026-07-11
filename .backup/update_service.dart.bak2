@@ -11,36 +11,19 @@ class UpdateService {
   static const String repoUrl =
       'https://github.com/$repoOwner/$repoName';
 
-  /// 拉取所有已发布的 release（用于更新页展示历史版本列表）
-  ///
-  /// 失败时抛出 [UpdateException]，UI 层可据此显示具体原因。
+  /// 获取所有 release（用于更新页展示历史版本）
   static Future<List<ReleaseInfo>> fetchAllReleases() async {
     final url =
-        'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=30';
+        'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=20';
     final response = await http.get(Uri.parse(url), headers: {
       'Accept': 'application/vnd.github+json',
     });
 
-    if (response.statusCode == 404) {
-      // 仓库不存在或没有任何 release
-      throw UpdateException('仓库暂无任何已发布版本', code: 404);
-    }
-    if (response.statusCode == 403) {
-      // 未认证请求限流（60次/小时）
-      final body = _safeDecode(response);
-      final msg = body is Map ? (body['message'] as String? ?? '') : '';
-      throw UpdateException(
-        msg.contains('rate limit')
-            ? 'GitHub 请求过于频繁，请稍后再试'
-            : 'GitHub 拒绝了请求（403）',
-        code: 403,
-      );
-    }
     if (response.statusCode != 200) {
-      throw UpdateException('GitHub 接口返回 ${response.statusCode}', code: response.statusCode);
+      throw Exception('GitHub 接口返回 ${response.statusCode}');
     }
 
-    final json = _safeDecode(response);
+    final json = jsonDecode(utf8.decode(response.bodyBytes));
     if (json is! List) return [];
 
     return json
@@ -48,22 +31,12 @@ class UpdateService {
         .toList();
   }
 
-  /// 检查更新
-  ///
-  /// [currentVersion] 不带前缀 v，例如 '4.1.0'。
-  /// 优先用 /releases/latest 判断「是否有新版本」，
-  /// 同时拉取全部 releases 供用户手动选择下载。
-  ///
-  /// 如果没有任何 release（404），返回 hasUpdate=false 且 allReleases=[]，
-  /// UI 层据此显示「暂无发布版本」。
-  static Future<UpdateInfo> checkUpdate(String currentVersion) async {
-    // 先拉全部 releases（用户可手动选下载）
-    List<ReleaseInfo> allReleases;
+  /// 检查最新版本是否有更新
+  /// currentVersion 不带前缀 v，例如 '4.0.0'
+  static Future<UpdateInfo?> checkUpdate(String currentVersion) async {
     try {
-      allReleases = await fetchAllReleases();
-    } on UpdateException catch (e) {
-      // 404 = 没有 release，不算错误，只是没有可下载的版本
-      if (e.code == 404) {
+      final releases = await fetchAllReleases();
+      if (releases.isEmpty) {
         return UpdateInfo(
           version: currentVersion,
           tag: 'v$currentVersion',
@@ -74,11 +47,23 @@ class UpdateService {
           allReleases: const [],
         );
       }
-      // 其他错误（限流、网络）向上抛
-      rethrow;
-    }
 
-    if (allReleases.isEmpty) {
+      final latest = releases.first;
+      final latestVersion = latest.version; // 已去掉前缀 v
+
+      final hasUpdate =
+          _compareVersions(latestVersion, currentVersion) > 0;
+
+      return UpdateInfo(
+        version: latestVersion,
+        tag: latest.tagName,
+        releaseNotes: latest.body,
+        downloadUrl: latest.apkUrl,
+        hasUpdate: hasUpdate,
+        latestRelease: latest,
+        allReleases: releases,
+      );
+    } catch (_) {
       return UpdateInfo(
         version: currentVersion,
         tag: 'v$currentVersion',
@@ -89,22 +74,6 @@ class UpdateService {
         allReleases: const [],
       );
     }
-
-    // 第一个就是最新版（GitHub 默认按发布时间倒序）
-    final latest = allReleases.first;
-    final latestVersion = latest.version; // 已去掉前缀 v
-
-    final hasUpdate = _compareVersions(latestVersion, currentVersion) > 0;
-
-    return UpdateInfo(
-      version: latestVersion,
-      tag: latest.tagName,
-      releaseNotes: latest.body,
-      downloadUrl: latest.apkUrl,
-      hasUpdate: hasUpdate,
-      latestRelease: latest,
-      allReleases: allReleases,
-    );
   }
 
   /// 比较版本号：v1 > v2 返回 1，相等返回 0，小于返回 -1
@@ -126,24 +95,6 @@ class UpdateService {
     }
     return 0;
   }
-
-  static dynamic _safeDecode(http.Response response) {
-    try {
-      return jsonDecode(utf8.decode(response.bodyBytes));
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
-/// 更新服务异常，带状态码便于 UI 区分处理
-class UpdateException implements Exception {
-  final String message;
-  final int code;
-  UpdateException(this.message, {required this.code});
-
-  @override
-  String toString() => message;
 }
 
 /// 单个 Release 信息
@@ -177,15 +128,12 @@ class ReleaseInfo {
     final assets = assetsRaw
         .map((e) => ReleaseAsset.fromJson(e as Map<String, dynamic>))
         .toList();
-    // 找 .apk 后缀的资源；找不到就用第一个；都没有就 null
-    String? apk;
-    if (assets.isNotEmpty) {
-      final apkAsset = assets.firstWhere(
-        (a) => a.name.toLowerCase().endsWith('.apk'),
-        orElse: () => assets.first,
-      );
-      apk = apkAsset.url;
-    }
+    final apkAsset = assets.firstWhere(
+      (a) => a.name.toLowerCase().endsWith('.apk'),
+      orElse: () => assets.isNotEmpty
+          ? assets.first
+          : ReleaseAsset.empty(),
+    );
 
     DateTime published;
     try {
@@ -202,7 +150,7 @@ class ReleaseInfo {
       publishedAt: published,
       prerelease: json['prerelease'] as bool? ?? false,
       htmlUrl: json['html_url'] as String? ?? '',
-      apkUrl: apk,
+      apkUrl: apkAsset.url,
       assets: assets,
     );
   }
