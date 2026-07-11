@@ -499,7 +499,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                   ),
                   const Divider(height: 24),
                   ListTile(
-                    leading: const Icon(Icons.bot_outlined),
+                    leading: const Icon(Icons.auto_awesome_outlined),
                     title: const Text('AI 助手'),
                     onTap: () {
                       Navigator.pop(context);
