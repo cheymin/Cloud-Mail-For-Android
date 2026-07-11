@@ -123,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _checkUpdate() async {
     setState(() => _checkingUpdate = true);
     try {
-      final updateInfo = await UpdateService.checkUpdate('2.3.0');
+      final updateInfo = await UpdateService.checkUpdate('2.3.1');
       setState(() => _checkingUpdate = false);
 
       if (updateInfo?.hasUpdate == true) {
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-            ),
+          ),
           const SizedBox(height: 24),
           _buildSectionTitle('邮件'),
           Container(
@@ -301,7 +301,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.update_outlined,
                   title: '检查更新',
-                  subtitle: '当前版本: 2.3.0',
+                  subtitle: '当前版本: 2.3.1',
                   onTap: _checkingUpdate ? null : _checkUpdate,
                   trailing: _checkingUpdate
                       ? const SizedBox(
@@ -476,21 +476,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildTile(
                   icon: Icons.info_outline,
                   title: '版本',
-                  subtitle: '2.0.0',
+                  subtitle: '2.3.1',
                 ),
                 const Divider(height: 1, indent: 56),
                 _buildTile(
-                  icon: Icons.favorite_outline,
-                  title: '关于 Cloud Mail',
-                  subtitle: '基于 Cloudflare 的简约邮箱服务',
-                  onTap: () {},
+                  icon: Icons.cleaning_services_outlined,
+                  title: '清空 AI 对话历史',
+                  subtitle: '删除所有 AI 助手的对话记录',
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('清空对话历史？'),
+                        content: const Text('确定要删除所有 AI 对话记录吗？'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('取消'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('清空'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      AiService.clearAllConversations();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('AI 对话历史已清空')),
+                        );
+                      }
+                    }
+                  },
                 ),
                 const Divider(height: 1, indent: 56),
                 _buildTile(
                   icon: Icons.code_outlined,
-                  title: '开源项目',
-                  subtitle: 'github.com/maillab/cloud-mail',
-                  onTap: () {},
+                  title: '项目地址',
+                  subtitle: 'github.com/cheymin/vpn',
+                  onTap: () async {
+                    const url = 'https://github.com/cheymin/vpn';
+                    if (await canLaunchUrl(Uri.parse(url))) {
+                      await launchUrl(Uri.parse(url));
+                    }
+                  },
                 ),
               ],
             ),
@@ -544,7 +576,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subtitle: subtitle != null
           ? Text(subtitle, style: const TextStyle(fontSize: 13))
           : null,
-      trailing: trailing ?? const Icon(Icons.chevron_right, size: 20),
+      trailing: trailing ??
+          (onTap != null ? const Icon(Icons.chevron_right, size: 20) : null),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
