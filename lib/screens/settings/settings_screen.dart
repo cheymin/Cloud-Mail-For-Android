@@ -29,7 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _selectedModel;
   bool _loadingModels = false;
   // 应用当前版本（运行时从 package_info_plus 动态读取）
-  String _appVersion = '4.1.0';
+  String _appVersion = '4.2.0';
 
   @override
   void initState() {

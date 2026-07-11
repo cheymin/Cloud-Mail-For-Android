@@ -17,8 +17,10 @@ class UpdateService {
   static Future<List<ReleaseInfo>> fetchAllReleases() async {
     final url =
         'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=30';
+    // GitHub API 要求所有请求带 User-Agent，否则可能被拒绝
     final response = await http.get(Uri.parse(url), headers: {
       'Accept': 'application/vnd.github+json',
+      'User-Agent': 'Cloud-Mail-App',
     });
 
     if (response.statusCode == 404) {
@@ -37,7 +39,12 @@ class UpdateService {
       );
     }
     if (response.statusCode != 200) {
-      throw UpdateException('GitHub 接口返回 ${response.statusCode}', code: response.statusCode);
+      // 带上响应体片段便于排查
+      final body = utf8.decode(response.bodyBytes);
+      final snippet = body.length > 200 ? body.substring(0, 200) : body;
+      throw UpdateException(
+          'GitHub 接口返回 ${response.statusCode}: $snippet',
+          code: response.statusCode);
     }
 
     final json = _safeDecode(response);
