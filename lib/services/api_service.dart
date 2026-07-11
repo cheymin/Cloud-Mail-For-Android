@@ -42,6 +42,8 @@ class CloudMailApi {
     return _parseResponse<String>(response, (data) => data['token'] as String);
   }
 
+  /// 查询邮件列表 — 使用官方公开 API POST /api/public/emailList
+  /// 官方参数: toEmail, sendName, sendEmail, subject, content, timeSort, type, isDel, num(页码), size
   Future<ApiResponse<EmailListResult>> getEmailList({
     int? accountId,
     int type = 0,
@@ -57,29 +59,45 @@ class CloudMailApi {
     int? isDel,
     int page = 1,
   }) async {
-    final params = <String, String>{};
-    if (accountId != null) params['accountId'] = accountId.toString();
-    params['type'] = type.toString();
-    params['size'] = size.toString();
-    if (emailId != null) params['emailId'] = emailId.toString();
-    params['timeSort'] = timeSort.toString();
-    if (allReceive != null) params['allReceive'] = allReceive.toString();
-    if (toEmail != null && toEmail.isNotEmpty) params['toEmail'] = toEmail;
-    if (sendName != null && sendName.isNotEmpty) params['sendName'] = sendName;
-    if (sendEmail != null && sendEmail.isNotEmpty) params['sendEmail'] = sendEmail;
-    if (subject != null && subject.isNotEmpty) params['subject'] = subject;
-    if (content != null && content.isNotEmpty) params['content'] = content;
-    if (isDel != null) params['isDel'] = isDel.toString();
+    final body = <String, dynamic>{
+      'type': type,
+      'size': size,
+      'timeSort': timeSort,
+      'num': page, // 官方 API 用 num 表示页码
+    };
+    if (toEmail != null && toEmail.isNotEmpty) body['toEmail'] = toEmail;
+    if (sendName != null && sendName.isNotEmpty) body['sendName'] = sendName;
+    if (sendEmail != null && sendEmail.isNotEmpty) body['sendEmail'] = sendEmail;
+    if (subject != null && subject.isNotEmpty) body['subject'] = subject;
+    if (content != null && content.isNotEmpty) body['content'] = content;
+    if (isDel != null) body['isDel'] = isDel;
 
-    final uri = Uri.parse(_url('/email/list')).replace(queryParameters: params);
-    final response = await http.get(uri, headers: _headers);
+    final response = await http.post(
+      Uri.parse(_url('/api/public/emailList')),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
 
     return _parseResponse<EmailListResult>(response, (data) {
-      final list = (data['list'] as List).map((e) => Email.fromJson(e)).toList();
-      final total = data['total'] ?? 0;
-      final latestEmail =
-          data['latestEmail'] != null ? Email.fromJson(data['latestEmail']) : null;
-      return EmailListResult(list: list, total: total, latestEmail: latestEmail);
+      // 官方 API 返回数组，兼容内部 API 返回对象
+      List<Email> list;
+      if (data is List) {
+        list = data
+            .map((e) => Email.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } else if (data is Map<String, dynamic>) {
+        final rawList = data['list'] as List? ?? [];
+        list = rawList
+            .map((e) => Email.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } else {
+        list = [];
+      }
+      return EmailListResult(
+        list: list,
+        total: list.length,
+        latestEmail: list.isNotEmpty ? list.first : null,
+      );
     });
   }
 

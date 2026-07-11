@@ -27,7 +27,8 @@ class _MailboxScreenState extends State<MailboxScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
-  int? _lastEmailId;
+  int? _lastEmailId; // 星标列表游标分页
+  int _currentPage = 1; // 普通邮件页码分页
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
@@ -155,6 +156,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
       _loading = true;
       _emails = [];
       _lastEmailId = null;
+      _currentPage = 1;
       _hasMore = true;
     });
 
@@ -173,11 +175,11 @@ class _MailboxScreenState extends State<MailboxScreen> {
       } else {
         final isDel = _currentFolder == MailFolder.trash ? 2 : null;
         final response = await widget.api.getEmailList(
-          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
           timeSort: 0,
           isDel: isDel,
+          page: _currentPage,
           subject:
               _searching && _searchController.text.isNotEmpty
                   ? '%${_searchController.text}%'
@@ -187,9 +189,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
           setState(() {
             _emails = response.data!.list;
             _hasMore = _emails.length >= 20;
-            if (_emails.isNotEmpty) {
-              _lastEmailId = _emails.last.emailId;
-            }
           });
         }
       }
@@ -224,14 +223,14 @@ class _MailboxScreenState extends State<MailboxScreen> {
           });
         }
       } else {
+        _currentPage++;
         final isDel = _currentFolder == MailFolder.trash ? 2 : null;
         final response = await widget.api.getEmailList(
-          accountId: StorageService.currentAccountId,
           type: _emailType,
           size: 20,
-          emailId: _lastEmailId,
           timeSort: 0,
           isDel: isDel,
+          page: _currentPage,
           subject:
               _searching && _searchController.text.isNotEmpty
                   ? '%${_searchController.text}%'
@@ -241,9 +240,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
           setState(() {
             _emails.addAll(response.data!.list);
             _hasMore = response.data!.list.length >= 20;
-            if (response.data!.list.isNotEmpty) {
-              _lastEmailId = response.data!.list.last.emailId;
-            }
           });
         }
       }

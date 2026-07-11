@@ -4,6 +4,54 @@ import '../models/email.dart';
 import '../services/api_service.dart';
 import '../utils/storage.dart';
 
+/// AI 对话会话模型
+class ChatConversation {
+  final String id;
+  String title;
+  final int createdAt;
+  int updatedAt;
+  List<Map<String, String>> messages;
+
+  ChatConversation({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.messages,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'messages': messages,
+      };
+
+  factory ChatConversation.fromJson(Map<String, dynamic> json) {
+    return ChatConversation(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      createdAt: json['createdAt'] as int,
+      updatedAt: json['updatedAt'] as int,
+      messages: (json['messages'] as List)
+          .map((e) => Map<String, String>.from(e as Map))
+          .toList(),
+    );
+  }
+
+  static ChatConversation createNew() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return ChatConversation(
+      id: now.toString(),
+      title: '新对话',
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    );
+  }
+}
+
 class AiService {
   String? _apiKey;
   String? _baseUrl;
@@ -21,6 +69,50 @@ class AiService {
 
   bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
   String get model => _model ?? 'gpt-4o-mini';
+
+  // ===== 对话历史管理 =====
+
+  /// 加载所有对话（按更新时间倒序）
+  static List<ChatConversation> loadAllConversations() {
+    final json = StorageService.chatHistory;
+    if (json == null || json.isEmpty) return [];
+    try {
+      final list = jsonDecode(json) as List;
+      final conversations = list
+          .map((e) => ChatConversation.fromJson(e as Map<String, dynamic>))
+          .toList();
+      conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return conversations;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// 保存/更新对话
+  static void saveConversation(ChatConversation conv) {
+    final all = loadAllConversations();
+    final idx = all.indexWhere((c) => c.id == conv.id);
+    if (idx >= 0) {
+      all[idx] = conv;
+    } else {
+      all.add(conv);
+    }
+    StorageService.chatHistory =
+        jsonEncode(all.map((c) => c.toJson()).toList());
+  }
+
+  /// 删除对话
+  static void deleteConversation(String id) {
+    final all = loadAllConversations();
+    all.removeWhere((c) => c.id == id);
+    StorageService.chatHistory =
+        jsonEncode(all.map((c) => c.toJson()).toList());
+  }
+
+  /// 清空所有对话
+  static void clearAllConversations() {
+    StorageService.chatHistory = null;
+  }
 
   /// 从上游获取可用模型列表
   Future<List<String>> fetchModels() async {
