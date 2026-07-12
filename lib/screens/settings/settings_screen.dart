@@ -153,20 +153,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _syncContacts() async {
+  /// 上传全部配置到云端（应用设置 + 联系人）
+  Future<void> _uploadToCloud() async {
     setState(() => _syncing = true);
     final messages = <String>[];
 
-    // 1. 同步联系人
-    final contactResult = await ContactSync.sync();
-    messages.add(contactResult.message);
-
-    // 2. 同步应用设置
+    // 1. 上传应用设置
     final settingsResult = await AppSync.uploadSettings();
     messages.add(settingsResult.message);
 
+    // 2. 上传联系人
+    final contactResult = await ContactSync.upload();
+    messages.add(contactResult.message);
+
     if (mounted) {
       setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(messages.join('；'))),
+      );
+    }
+  }
+
+  /// 从云端拉取全部配置并应用（应用设置 + 联系人）
+  Future<void> _pullFromCloud() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('从云端拉取配置？'),
+        content: const Text('云端的应用设置和联系人将覆盖本地数据，确定继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('拉取'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _syncing = true);
+    final messages = <String>[];
+
+    // 1. 下载应用设置
+    final settingsResult = await AppSync.downloadSettings();
+    messages.add(settingsResult.message);
+
+    // 2. 下载联系人
+    final contactResult = await ContactSync.download();
+    messages.add(contactResult.message);
+
+    if (mounted) {
+      setState(() {
+        _syncing = false;
+        // 刷新本地设置状态
+        _showAvatar = StorageService.showSenderAvatar;
+        _autoLoadImages = StorageService.autoLoadImages;
+        _swipeActionsEnabled = StorageService.swipeActionsEnabled;
+        _apiKeyController.text = StorageService.openaiApiKey ?? '';
+        _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
+        _selectedModel = StorageService.openaiModel;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(messages.join('；'))),
       );
@@ -694,7 +744,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _syncing ? null : _syncContacts,
+                      onPressed: _syncing ? null : _uploadToCloud,
                       icon: _syncing
                           ? const SizedBox(
                               width: 16,
@@ -702,8 +752,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.sync, size: 18),
-                      label: const Text('立即同步'),
+                          : const Icon(Icons.cloud_upload, size: 18),
+                      label: const Text('上传配置'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _syncing ? null : _pullFromCloud,
+                      icon: _syncing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.cloud_download, size: 18),
+                      label: const Text('拉取配置'),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(

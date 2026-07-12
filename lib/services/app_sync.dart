@@ -32,17 +32,19 @@ class AppSync {
   /// 导出所有用户设置为 JSON
   static Map<String, dynamic> exportSettings() {
     return {
-      'version': 1,
+      'version': 2,
       'exportTime': DateTime.now().toIso8601String(),
       'uiStyle': StorageService.uiStyle,
       'themeMode': StorageService.themeMode,
       'showSenderAvatar': StorageService.showSenderAvatar,
       'autoLoadImages': StorageService.autoLoadImages,
+      'swipeActionsEnabled': StorageService.swipeActionsEnabled,
       'openaiApiKey': StorageService.openaiApiKey ?? '',
       'openaiBaseUrl': StorageService.openaiBaseUrl ?? '',
       'openaiModel': StorageService.openaiModel ?? '',
       'customPrimaryColor': StorageService.customPrimaryColor,
       'customFontFamily': StorageService.customFontFamily,
+      'customFontPath': StorageService.customFontPath,
       'customBackgroundImage': StorageService.customBackgroundImage,
       'rememberLogin': StorageService.rememberLogin,
       'chatHistory': StorageService.chatHistory ?? '',
@@ -69,6 +71,10 @@ class AppSync {
       StorageService.autoLoadImages = data['autoLoadImages'] as bool;
       changed++;
     }
+    if (data['swipeActionsEnabled'] != null) {
+      StorageService.swipeActionsEnabled = data['swipeActionsEnabled'] as bool;
+      changed++;
+    }
     if (data['openaiApiKey'] != null) {
       StorageService.openaiApiKey = data['openaiApiKey'] as String;
       changed++;
@@ -87,6 +93,14 @@ class AppSync {
     }
     if (data['customFontFamily'] != null) {
       StorageService.customFontFamily = data['customFontFamily'] as String?;
+      changed++;
+    }
+    if (data['customFontPath'] != null) {
+      StorageService.customFontPath = data['customFontPath'] as String?;
+      changed++;
+    }
+    if (data['customBackgroundImage'] != null) {
+      StorageService.customBackgroundImage = data['customBackgroundImage'] as String?;
       changed++;
     }
     if (data['rememberLogin'] != null) {
