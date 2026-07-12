@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
@@ -238,41 +239,49 @@ class StorageService {
 
 class ErrorMessages {
   static const List<String> connectionErrors = [
-    '网络连接失败，请检查网络设置',
-    '无法连接到服务器，请稍后重试',
-    '网络不可用，请检查你的连接',
+    '网断啦！检查一下你的 WiFi 是不是在摸鱼 🐟',
+    '服务器失联了...它可能去度假了 🏖️',
+    '网络离家出走了，请先把它找回来 🌐',
   ];
 
   static const List<String> timeoutErrors = [
-    '请求超时，请稍后重试',
-    '服务器响应超时',
+    '服务器在发呆，等太久啦 ⏰',
+    '请求超时！服务器可能在思考人生 🤔',
+    '响应太慢了，比蜗牛还慢 🐌',
   ];
 
   static const List<String> authErrors = [
-    '认证失败，请重新登录',
-    '登录已过期，请重新登录',
-    '邮箱或密码错误',
+    '登录过期了，重新登一下吧~ 🔐',
+    '认证失败！你的身份成谜 🕵️',
+    '邮箱或密码不对哦，再想想？ 🤨',
   ];
 
   static const List<String> serverErrors = [
-    '服务器错误，请稍后重试',
-    '服务器内部错误',
+    '服务器炸了，请稍后再试 💥',
+    '服务器内部出了点小状况 🤯',
+    '后端小哥正在抢修中... 🛠️',
   ];
 
   static const List<String> unknownErrors = [
-    '发生未知错误',
-    '操作失败，请稍后重试',
+    '发生了一些奇怪的事情 🤪',
+    '啊哦，出问题了，但我不知道为啥 😅',
+    '未知错误，玄学范畴 🎲',
   ];
 
-  static String getConnection() => connectionErrors.first;
+  static final _random = Random();
 
-  static String getTimeout() => timeoutErrors.first;
+  static String _pickRandom(List<String> list) =>
+      list[_random.nextInt(list.length)];
 
-  static String getAuth() => authErrors.first;
+  static String getConnection() => _pickRandom(connectionErrors);
 
-  static String getServer() => serverErrors.first;
+  static String getTimeout() => _pickRandom(timeoutErrors);
 
-  static String getUnknown() => unknownErrors.first;
+  static String getAuth() => _pickRandom(authErrors);
+
+  static String getServer() => _pickRandom(serverErrors);
+
+  static String getUnknown() => _pickRandom(unknownErrors);
 
   static String fromException(dynamic e) {
     final msg = e.toString().toLowerCase();
