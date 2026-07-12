@@ -385,6 +385,20 @@ $emailListStr
     }
   }
 
+  /// 一键翻译文本
+  Future<String> translateText(String text) async {
+    if (!isConfigured) {
+      return '请先在设置中配置 API Key';
+    }
+
+    final prompt = '请将以下文本翻译成中文。只输出翻译结果，不要添加任何解释或说明：\n\n$text';
+
+    return await _callChatCompletion([
+      {'role': 'system', 'content': '你是一个专业翻译，擅长将各种语言的文本准确翻译成中文。只输出翻译结果。'},
+      {'role': 'user', 'content': prompt},
+    ]);
+  }
+
   Future<String> _callChatCompletion(List<Map<String, String>> messages) async {
     if (!isConfigured) {
       return '请先在设置中配置 OpenAI API Key';

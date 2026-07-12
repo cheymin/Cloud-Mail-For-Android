@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/email.dart';
+import '../../services/ai_service.dart';
 import '../../services/api_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
@@ -27,6 +28,9 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   late Email _email;
   bool _isStarred = false;
   bool _loading = false;
+  bool _translating = false;
+  String? _translatedText;
+  bool _showingTranslation = false;
 
   double _contentScale = 1.0;
   late final TransformationController _transformController;
@@ -82,6 +86,49 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       return DateFormat('yyyy-MM-dd HH:mm').format(dt);
     } catch (e) {
       return timeStr;
+    }
+  }
+
+  /// 一键翻译邮件全文
+  Future<void> _translateEmail() async {
+    final ai = AiService();
+    if (!ai.isConfigured) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先在设置中配置 AI API Key')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _translating = true);
+
+    try {
+      final plainText = _email.text.isNotEmpty
+          ? _email.text
+          : _email.content.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+
+      final result = await ai.translateText(plainText);
+      if (result.startsWith('翻译失败') || result.startsWith('API 错误') || result.startsWith('请求失败') || result.startsWith('请先')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result)),
+          );
+        }
+      } else {
+        setState(() {
+          _translatedText = result;
+          _showingTranslation = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('翻译失败: ${ErrorMessages.fromException(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _translating = false);
     }
   }
 
@@ -235,6 +282,13 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         case 'copy':
                           _copyEmailContent();
                           break;
+                        case 'translate':
+                          if (_showingTranslation) {
+                            setState(() => _showingTranslation = false);
+                          } else {
+                            _translateEmail();
+                          }
+                          break;
                         case 'zoom_in':
                           _zoomBy(1.25);
                           break;
@@ -255,30 +309,45 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                           Text('复制邮件内容'),
                         ]),
                       ),
-                      const PopupMenuItem(
-                        value: 'zoom_in',
+                      PopupMenuItem(
+                        value: 'translate',
                         child: Row(children: [
-                          Icon(Icons.zoom_in_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('放大'),
+                          Icon(
+                            _showingTranslation
+                                ? Icons.visibility_off_outlined
+                                : Icons.translate_outlined,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(_showingTranslation ? '隐藏翻译' : '一键翻译'),
                         ]),
                       ),
-                      const PopupMenuItem(
-                        value: 'zoom_out',
-                        child: Row(children: [
-                          Icon(Icons.zoom_out_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('缩小'),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: 'zoom_reset',
-                        child: Row(children: [
-                          Icon(Icons.restart_alt_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('恢复默认大小'),
-                        ]),
-                      ),
+                      if (StorageService.pinchZoomEnabled) ...[
+                        const PopupMenuItem(
+                          value: 'zoom_in',
+                          child: Row(children: [
+                            Icon(Icons.zoom_in_outlined, size: 20),
+                            SizedBox(width: 8),
+                            Text('放大'),
+                          ]),
+                        ),
+                        const PopupMenuItem(
+                          value: 'zoom_out',
+                          child: Row(children: [
+                            Icon(Icons.zoom_out_outlined, size: 20),
+                            SizedBox(width: 8),
+                            Text('缩小'),
+                          ]),
+                        ),
+                        const PopupMenuItem(
+                          value: 'zoom_reset',
+                          child: Row(children: [
+                            Icon(Icons.restart_alt_outlined, size: 20),
+                            SizedBox(width: 8),
+                            Text('恢复默认大小'),
+                          ]),
+                        ),
+                      ],
                       const PopupMenuDivider(),
                       const PopupMenuItem(
                         value: 'delete',
@@ -299,45 +368,111 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                 transformationController: _transformController,
                 minScale: _minScale,
                 maxScale: _maxScale,
-                panEnabled: true,
-                scaleEnabled: true,
+                panEnabled: StorageService.pinchZoomEnabled,
+                scaleEnabled: StorageService.pinchZoomEnabled,
                 boundaryMargin: const EdgeInsets.all(double.infinity),
                 alignment: Alignment.topCenter,
-                onInteractionEnd: (details) {
-                  final scale =
-                      _transformController.value.getMaxScaleOnAxis();
-                  if ((scale - _contentScale).abs() > 0.01) {
-                    setState(() => _contentScale = scale);
-                  }
-                },
+                onInteractionEnd: StorageService.pinchZoomEnabled
+                    ? (details) {
+                        final scale =
+                            _transformController.value.getMaxScaleOnAxis();
+                        if ((scale - _contentScale).abs() > 0.01) {
+                          setState(() => _contentScale = scale);
+                        }
+                      }
+                    : null,
                 child: SingleChildScrollView(
                   child: Container(
                     width: MediaQuery.of(context).size.width,
                     color: cs.surface,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildEmailHeader(
-                          cs: cs,
-                          isGoogle: isGoogle,
-                          isDark: isDark,
-                          senderEmail: senderEmail,
-                          displayName: displayName,
-                          accountColor: accountColor,
-                        ),
-                        Container(
-                          height: 0.5,
-                          color: cs.outlineVariant,
-                        ),
-                        _buildEmailBody(isDark),
-                      ],
+                    child: SelectionArea(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildEmailHeader(
+                            cs: cs,
+                            isGoogle: isGoogle,
+                            isDark: isDark,
+                            senderEmail: senderEmail,
+                            displayName: displayName,
+                            accountColor: accountColor,
+                          ),
+                          Container(
+                            height: 0.5,
+                            color: cs.outlineVariant,
+                          ),
+                          _buildEmailBody(isDark),
+                          // 翻译结果
+                          if (_translating) ...[
+                            const SizedBox(height: 24),
+                            Center(
+                              child: Column(
+                                children: [
+                                  const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '正在翻译...',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (_showingTranslation && _translatedText != null) ...[
+                            Container(
+                              height: 0.5,
+                              margin: const EdgeInsets.symmetric(horizontal: 16),
+                              color: cs.outlineVariant,
+                            ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.translate_outlined, size: 18, color: cs.primary),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '中文翻译',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: cs.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SelectableText(
+                                    _translatedText!,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      height: 1.6,
+                                      color: cs.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
             // ===== 底部缩放指示器 =====
-            if (_contentScale != 1.0)
+            if (StorageService.pinchZoomEnabled && _contentScale != 1.0)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
@@ -559,22 +694,20 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       child: hasHtml
-          ? SelectionArea(
-              child: HtmlWidget(
-                content,
-                onTapUrl: (url) async {
-                  final uri = Uri.parse(url);
-                  try {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
-                  } catch (_) {}
-                  return true;
-                },
-                textStyle: TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: cs.onSurface,
-                ),
+          ? HtmlWidget(
+              content,
+              onTapUrl: (url) async {
+                final uri = Uri.parse(url);
+                try {
+                  await launchUrl(uri,
+                      mode: LaunchMode.externalApplication);
+                } catch (_) {}
+                return true;
+              },
+              textStyle: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: cs.onSurface,
               ),
             )
           : SelectableText(

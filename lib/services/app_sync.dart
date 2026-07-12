@@ -39,6 +39,7 @@ class AppSync {
       'showSenderAvatar': StorageService.showSenderAvatar,
       'autoLoadImages': StorageService.autoLoadImages,
       'swipeActionsEnabled': StorageService.swipeActionsEnabled,
+      'pinchZoomEnabled': StorageService.pinchZoomEnabled,
       'openaiApiKey': StorageService.openaiApiKey ?? '',
       'openaiBaseUrl': StorageService.openaiBaseUrl ?? '',
       'openaiModel': StorageService.openaiModel ?? '',
@@ -73,6 +74,10 @@ class AppSync {
     }
     if (data['swipeActionsEnabled'] != null) {
       StorageService.swipeActionsEnabled = data['swipeActionsEnabled'] as bool;
+      changed++;
+    }
+    if (data['pinchZoomEnabled'] != null) {
+      StorageService.pinchZoomEnabled = data['pinchZoomEnabled'] as bool;
       changed++;
     }
     if (data['openaiApiKey'] != null) {
