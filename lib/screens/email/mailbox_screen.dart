@@ -972,7 +972,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
-      direction: _selectMode ? DismissDirection.none : DismissDirection.horizontal,
+      direction: (_selectMode || !StorageService.swipeActionsEnabled)
+          ? DismissDirection.none
+          : DismissDirection.horizontal,
       background: Container(
         color: cs.primary,
         alignment: Alignment.centerLeft,
@@ -1188,7 +1190,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
-      direction: _selectMode ? DismissDirection.none : DismissDirection.horizontal,
+      direction: (_selectMode || !StorageService.swipeActionsEnabled)
+          ? DismissDirection.none
+          : DismissDirection.horizontal,
       background: Container(
         color: cs.primary,
         alignment: Alignment.centerLeft,

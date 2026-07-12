@@ -108,6 +108,12 @@ class StorageService {
     _prefs?.setBool('autoLoadImages', value);
   }
 
+  /// 邮件列表滑动操作（左滑删除/右滑星标），默认开启
+  static bool get swipeActionsEnabled => _prefs?.getBool('swipeActionsEnabled') ?? true;
+  static set swipeActionsEnabled(bool value) {
+    _prefs?.setBool('swipeActionsEnabled', value);
+  }
+
   static String? get openaiApiKey => _prefs?.getString('openaiApiKey');
   static set openaiApiKey(String? value) {
     if (value != null) {

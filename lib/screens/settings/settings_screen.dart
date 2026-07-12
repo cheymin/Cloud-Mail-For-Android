@@ -28,6 +28,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _showAvatar = true;
   bool _autoLoadImages = true;
+  bool _swipeActionsEnabled = true;
   final _apiKeyController = TextEditingController();
   final _baseUrlController = TextEditingController();
   List<String> _models = [];
@@ -65,6 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _showAvatar = StorageService.showSenderAvatar;
     _autoLoadImages = StorageService.autoLoadImages;
+    _swipeActionsEnabled = StorageService.swipeActionsEnabled;
     _apiKeyController.text = StorageService.openaiApiKey ?? '';
     _baseUrlController.text = StorageService.openaiBaseUrl ?? '';
     _selectedModel = StorageService.openaiModel;
@@ -480,6 +482,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           _buildSectionTitle('邮件'),
           _buildCard([
+            _buildTile(
+              icon: Icons.swipe_right_alt_outlined,
+              title: '邮件滑动操作',
+              subtitle: '左滑删除、右滑星标',
+              trailing: Switch(
+                value: _swipeActionsEnabled,
+                onChanged: (val) {
+                  setState(() => _swipeActionsEnabled = val);
+                  StorageService.swipeActionsEnabled = val;
+                },
+              ),
+            ),
+            const Divider(height: 1, indent: 56),
             _buildTile(
               icon: Icons.image_outlined,
               title: '自动加载图片',
