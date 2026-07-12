@@ -193,7 +193,7 @@ class ReleaseInfo {
 
     DateTime published;
     try {
-      published = DateTime.parse(json['published_at'] as String? ?? '');
+      published = DateTime.parse(json['published_at'] as String? ?? '').toLocal();
     } catch (_) {
       published = DateTime.now();
     }

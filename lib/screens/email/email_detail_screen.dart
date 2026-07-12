@@ -86,7 +86,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
 
   String _formatFullTime(String timeStr) {
     try {
-      final dt = DateTime.parse(timeStr);
+      final dt = DateTime.parse(timeStr).toLocal();
       return DateFormat('yyyy-MM-dd HH:mm').format(dt);
     } catch (e) {
       return timeStr;

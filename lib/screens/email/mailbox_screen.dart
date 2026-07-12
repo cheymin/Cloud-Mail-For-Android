@@ -127,15 +127,22 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   String _formatTime(String timeStr) {
     try {
-      final dt = DateTime.parse(timeStr);
+      final dt = DateTime.parse(timeStr).toLocal();
       final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inDays == 0 && now.day == dt.day) {
+      final today = DateTime(now.year, now.month, now.day);
+      final emailDay = DateTime(dt.year, dt.month, dt.day);
+      final diffDays = today.difference(emailDay).inDays;
+
+      if (diffDays == 0) {
         return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-      } else if (diff.inDays < 7) {
-        return '${diff.inDays}天前';
+      } else if (diffDays == 1) {
+        return '昨天';
+      } else if (diffDays < 7) {
+        return '$diffDays天前';
+      } else if (now.year == dt.year) {
+        return '${dt.month}月${dt.day}日';
       } else {
-        return '${dt.month}/${dt.day}';
+        return '${dt.year}/${dt.month}/${dt.day}';
       }
     } catch (e) {
       return timeStr;

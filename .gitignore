@@ -49,3 +49,6 @@ windows/build/
 # OS
 .DS_Store
 Thumbs.db
+
+# 备份目录
+.backup/
