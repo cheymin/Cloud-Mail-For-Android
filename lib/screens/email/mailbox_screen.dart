@@ -37,8 +37,12 @@ class _MailboxScreenState extends State<MailboxScreen> {
   bool _searching = false;
   String _searchQuery = '';
 
-  // 是否正在后台静默刷新（缓存已显示，正在拉新数据）
   bool _silentRefreshing = false;
+
+  // 多选模式
+  bool _selectMode = false;
+  final Set<int> _selectedEmailIds = {};
+  bool _batchLoading = false;
 
   @override
   void initState() {
@@ -113,19 +117,12 @@ class _MailboxScreenState extends State<MailboxScreen> {
     }
   }
 
-  /// 当前文件夹用于缓存的 key
   String get _cacheKey => _currentFolder.name;
 
-  /// 「全部邮件」文件夹跨账户汇总所有收到邮件
   bool get _isAllFolder => _currentFolder == MailFolder.all;
 
-  /// 加载邮件时是否使用 allReceive=1
-  /// 「全部邮件」模式下传 allReceive=1，让后端聚合所有账户的收件
   int? get _allReceive => _isAllFolder ? 1 : null;
 
-  /// 当前文件夹加载邮件时使用的 accountId
-  /// 即便是「全部邮件」，也传当前账户 accountId（后端需要 JWT 上下文），
-  /// 配合 allReceive=1 聚合该用户名下所有账户的邮件
   int? get _queryAccountId => StorageService.currentAccountId;
 
   String _formatTime(String timeStr) {
@@ -163,8 +160,16 @@ class _MailboxScreenState extends State<MailboxScreen> {
     }).toList();
   }
 
+  // 未读邮件数量
+  int get _unreadCount {
+    return _emails.where((e) => !e.isRead && e.isReceived).length;
+  }
+
+
+
   Future<void> _loadEmails() async {
-    // 1. 优先读缓存：如果有缓存，立刻渲染，并标记为"静默刷新中"
+    _exitSelectMode();
+
     final cached = StorageService.getMailCache(_cacheKey, _queryAccountId);
     final hasCache = cached != null && cached.isNotEmpty;
     if (hasCache) {
@@ -218,7 +223,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
               _lastEmailId = fresh.last.emailId;
             }
           });
-          // 写入缓存
           StorageService.setMailCache(
             _cacheKey,
             _queryAccountId,
@@ -228,12 +232,10 @@ class _MailboxScreenState extends State<MailboxScreen> {
       }
     } catch (e) {
       if (mounted && !hasCache) {
-        // 没缓存时报错给用户看
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(ErrorMessages.fromException(e))),
         );
       }
-      // 有缓存时静默失败，不打扰用户
     } finally {
       if (mounted) {
         setState(() {
@@ -294,6 +296,10 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   void _openEmail(Email email) async {
+    if (_selectMode) {
+      _toggleSelect(email.emailId);
+      return;
+    }
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -302,6 +308,231 @@ class _MailboxScreenState extends State<MailboxScreen> {
     );
     if (result == true) {
       _loadEmails();
+    } else {
+      // 标记为已读（本地状态更新）
+      setState(() {
+        final idx = _emails.indexWhere((e) => e.emailId == email.emailId);
+        if (idx >= 0 && !_emails[idx].isRead) {
+          final old = _emails[idx];
+          _emails[idx] = Email(
+            emailId: old.emailId,
+            sendEmail: old.sendEmail,
+            sendName: old.sendName,
+            subject: old.subject,
+            toEmail: old.toEmail,
+            toName: old.toName,
+            createTime: old.createTime,
+            type: old.type,
+            content: old.content,
+            text: old.text,
+            isDel: old.isDel,
+            isStar: old.isStar,
+            status: 1,
+            messageId: old.messageId,
+            attList: old.attList,
+          );
+        }
+      });
+    }
+  }
+
+  // ========== 多选模式相关 ==========
+
+  void _enterSelectMode() {
+    setState(() => _selectMode = true);
+  }
+
+  void _exitSelectMode() {
+    setState(() {
+      _selectMode = false;
+      _selectedEmailIds.clear();
+    });
+  }
+
+  void _toggleSelect(int emailId) {
+    setState(() {
+      if (_selectedEmailIds.contains(emailId)) {
+        _selectedEmailIds.remove(emailId);
+        if (_selectedEmailIds.isEmpty) {
+          _selectMode = false;
+        }
+      } else {
+        _selectedEmailIds.add(emailId);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      for (final email in _filteredEmails) {
+        _selectedEmailIds.add(email.emailId);
+      }
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedEmailIds.clear();
+      _selectMode = false;
+    });
+  }
+
+  bool get _isAllSelected {
+    if (_filteredEmails.isEmpty) return false;
+    return _filteredEmails.every((e) => _selectedEmailIds.contains(e.emailId));
+  }
+
+  Future<void> _batchDelete() async {
+    if (_selectedEmailIds.isEmpty || _batchLoading) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除邮件'),
+        content: Text('确定要删除选中的 ${_selectedEmailIds.length} 封邮件吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _batchLoading = true);
+    try {
+      final ids = _selectedEmailIds.join(',');
+      final response = await widget.api.deleteEmails(ids);
+      if (response.isSuccess) {
+        setState(() {
+          _emails.removeWhere((e) => _selectedEmailIds.contains(e.emailId));
+          _selectedEmailIds.clear();
+          _selectMode = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已移到垃圾箱')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除失败: ${response.message}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorMessages.fromException(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _batchLoading = false);
+    }
+  }
+
+  Future<void> _batchMarkRead() async {
+    if (_selectedEmailIds.isEmpty || _batchLoading) return;
+    setState(() => _batchLoading = true);
+    try {
+      final ids = _selectedEmailIds.toList();
+      final response = await widget.api.markAsRead(ids);
+      if (response.isSuccess) {
+        setState(() {
+          for (int i = 0; i < _emails.length; i++) {
+            if (_selectedEmailIds.contains(_emails[i].emailId)) {
+              final old = _emails[i];
+              _emails[i] = Email(
+                emailId: old.emailId,
+                sendEmail: old.sendEmail,
+                sendName: old.sendName,
+                subject: old.subject,
+                toEmail: old.toEmail,
+                toName: old.toName,
+                createTime: old.createTime,
+                type: old.type,
+                content: old.content,
+                text: old.text,
+                isDel: old.isDel,
+                isStar: old.isStar,
+                status: 1,
+                messageId: old.messageId,
+                attList: old.attList,
+              );
+            }
+          }
+          _selectedEmailIds.clear();
+          _selectMode = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已标记为已读')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorMessages.fromException(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _batchLoading = false);
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    final unreadEmails = _filteredEmails.where((e) => !e.isRead).toList();
+    if (unreadEmails.isEmpty) return;
+    setState(() => _batchLoading = true);
+    try {
+      final ids = unreadEmails.map((e) => e.emailId).toList();
+      final response = await widget.api.markAsRead(ids);
+      if (response.isSuccess) {
+        setState(() {
+          for (int i = 0; i < _emails.length; i++) {
+            if (!_emails[i].isRead) {
+              final old = _emails[i];
+              _emails[i] = Email(
+                emailId: old.emailId,
+                sendEmail: old.sendEmail,
+                sendName: old.sendName,
+                subject: old.subject,
+                toEmail: old.toEmail,
+                toName: old.toName,
+                createTime: old.createTime,
+                type: old.type,
+                content: old.content,
+                text: old.text,
+                isDel: old.isDel,
+                isStar: old.isStar,
+                status: 1,
+                messageId: old.messageId,
+                attList: old.attList,
+              );
+            }
+          }
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('全部已标记为已读')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorMessages.fromException(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _batchLoading = false);
     }
   }
 
@@ -417,17 +648,52 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final content = SafeArea(
       child: Column(
         children: [
-          // 毛玻璃顶部导航栏
           GlassBox(
             isDark: isDark,
             blur: 25,
             opacity: 0.7,
             radius: 0,
-            child: isGoogle
-                ? _buildGoogleAppBar(isDark)
-                : _buildAppleAppBar(isDark),
+            child: _selectMode
+                ? _buildSelectAppBar(isDark)
+                : (isGoogle
+                    ? _buildGoogleAppBar(isDark)
+                    : _buildAppleAppBar(isDark)),
           ),
-          // 静默刷新指示条：缓存已显示，正在拉取最新数据
+          if (_selectMode)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withOpacity(0.3),
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '已选 ${_selectedEmailIds.length} 封',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _batchLoading ? null : _batchMarkRead,
+                    icon: const Icon(Icons.done_all_outlined, size: 18),
+                    label: const Text('已读'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _batchLoading ? null : _batchDelete,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('删除'),
+                    style: TextButton.styleFrom(foregroundColor: cs.error),
+                  ),
+                ],
+              ),
+            ),
           if (_silentRefreshing)
             Container(
               width: double.infinity,
@@ -474,7 +740,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      // 自定义背景图：用 Stack 叠加，内容半透明以衬托毛玻璃效果
       body: hasBg && themeProvider.customBackgroundImage != null
           ? Stack(
               children: [
@@ -489,11 +754,53 @@ class _MailboxScreenState extends State<MailboxScreen> {
               ],
             )
           : content,
-      drawer: _buildDrawer(isDark, isGoogle),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openCompose,
-        tooltip: '写邮件',
-        child: const Icon(Icons.edit_outlined),
+      drawer: _selectMode ? null : _buildDrawer(isDark, isGoogle),
+      floatingActionButton: _selectMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _openCompose,
+              tooltip: '写邮件',
+              child: const Icon(Icons.edit_outlined),
+            ),
+    );
+  }
+
+  // ========== 多选模式 AppBar ==========
+  Widget _buildSelectAppBar(bool isDark) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _deselectAll,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '选择邮件',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _isAllSelected ? _deselectAll : _selectAll,
+                icon: Icon(
+                  _isAllSelected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  size: 20,
+                ),
+                label: Text(_isAllSelected ? '取消全选' : '全选'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -505,7 +812,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       child: Column(
         children: [
-          // 顶栏：菜单 + 搜索框 + 头像
           Row(
             children: [
               IconButton(
@@ -568,19 +874,77 @@ class _MailboxScreenState extends State<MailboxScreen> {
               _buildAccountAvatar(),
             ],
           ),
-          // 当前文件夹标题
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _folderTitle,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w400,
-                  color: cs.onSurface,
+            child: Row(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _folderTitle,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w400,
+                      color: cs.onSurface,
+                    ),
+                  ),
                 ),
-              ),
+                const Spacer(),
+                if (_unreadCount > 0 &&
+                    _currentFolder != MailFolder.sent &&
+                    _currentFolder != MailFolder.trash)
+                  TextButton.icon(
+                    onPressed: _batchLoading ? null : _markAllAsRead,
+                    icon: const Icon(Icons.done_all_outlined, size: 18),
+                    label: Text('全部已读 ($_unreadCount)'),
+                    style: TextButton.styleFrom(
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'select':
+                        _enterSelectMode();
+                        break;
+                      case 'markAllRead':
+                        _markAllAsRead();
+                        break;
+                      case 'refresh':
+                        _loadEmails();
+                        break;
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'select',
+                      child: Row(children: [
+                        Icon(Icons.checklist_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('选择邮件'),
+                      ]),
+                    ),
+                    if (_currentFolder != MailFolder.sent &&
+                        _currentFolder != MailFolder.trash)
+                      const PopupMenuItem(
+                        value: 'markAllRead',
+                        child: Row(children: [
+                          Icon(Icons.done_all_outlined, size: 20),
+                          SizedBox(width: 8),
+                          Text('全部标记为已读'),
+                        ]),
+                      ),
+                    const PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(children: [
+                        Icon(Icons.refresh_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('刷新'),
+                      ]),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -658,6 +1022,49 @@ class _MailboxScreenState extends State<MailboxScreen> {
                   }
                 },
               ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'select':
+                      _enterSelectMode();
+                      break;
+                    case 'markAllRead':
+                      _markAllAsRead();
+                      break;
+                    case 'refresh':
+                      _loadEmails();
+                      break;
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'select',
+                    child: Row(children: [
+                      Icon(Icons.checklist_outlined, size: 20),
+                      SizedBox(width: 8),
+                      Text('选择邮件'),
+                    ]),
+                  ),
+                  if (_currentFolder != MailFolder.sent &&
+                      _currentFolder != MailFolder.trash)
+                    const PopupMenuItem(
+                      value: 'markAllRead',
+                      child: Row(children: [
+                        Icon(Icons.done_all_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('全部标记为已读'),
+                      ]),
+                    ),
+                  const PopupMenuItem(
+                    value: 'refresh',
+                    child: Row(children: [
+                      Icon(Icons.refresh_outlined, size: 20),
+                      SizedBox(width: 8),
+                      Text('刷新'),
+                    ]),
+                  ),
+                ],
+              ),
             ],
           ),
           AnimatedCrossFade(
@@ -701,7 +1108,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   // ==================== Google 风格邮件列表 ====================
   Widget _buildGoogleEmailList() {
-    final cs = Theme.of(context).colorScheme;
     final emails = _filteredEmails;
     return ListView.builder(
       controller: _scrollController,
@@ -738,9 +1144,12 @@ class _MailboxScreenState extends State<MailboxScreen> {
         AppTheme.accountColor(email.isSent ? email.toEmail : email.sendEmail);
     final hasAttachment =
         email.attList != null && email.attList!.isNotEmpty;
+    final isSelected = _selectedEmailIds.contains(email.emailId);
+    final isUnread = !email.isRead && email.isReceived;
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
+      direction: _selectMode ? DismissDirection.none : DismissDirection.horizontal,
       background: Container(
         color: cs.primary,
         alignment: Alignment.centerLeft,
@@ -769,9 +1178,15 @@ class _MailboxScreenState extends State<MailboxScreen> {
         }
       },
       child: Material(
-        color: Colors.transparent,
+        color: isSelected ? cs.primaryContainer.withOpacity(0.3) : Colors.transparent,
         child: InkWell(
           onTap: () => _openEmail(email),
+          onLongPress: () {
+            if (!_selectMode) {
+              _enterSelectMode();
+              _toggleSelect(email.emailId);
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -782,20 +1197,49 @@ class _MailboxScreenState extends State<MailboxScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 星标按钮
-                GestureDetector(
-                  onTap: () => _toggleStar(email),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 2, right: 12),
+                // 未读小点点
+                Container(
+                  width: 10,
+                  margin: const EdgeInsets.only(top: 14, right: 8),
+                  alignment: Alignment.center,
+                  child: isUnread
+                      ? Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                // 选择框
+                if (_selectMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 8),
                     child: Icon(
-                      email.isStarred ? Icons.star : Icons.star_border,
-                      size: 18,
-                      color: email.isStarred
-                          ? cs.tertiary
-                          : cs.onSurfaceVariant,
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      size: 22,
+                      color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                  )
+                else
+                  // 星标按钮
+                  GestureDetector(
+                    onTap: () => _toggleStar(email),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 12),
+                      child: Icon(
+                        email.isStarred ? Icons.star : Icons.star_border,
+                        size: 18,
+                        color: email.isStarred
+                            ? cs.tertiary
+                            : cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
                 // 方形圆角头像
                 Container(
                   width: 40,
@@ -809,9 +1253,10 @@ class _MailboxScreenState extends State<MailboxScreen> {
                       senderName.isNotEmpty
                           ? senderName[0].toUpperCase()
                           : '?',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                        fontWeight:
+                            isUnread ? FontWeight.w600 : FontWeight.w500,
                         fontSize: 16,
                       ),
                     ),
@@ -823,7 +1268,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 第一行：发件人 + 时间
                       Row(
                         children: [
                           Expanded(
@@ -833,7 +1277,8 @@ class _MailboxScreenState extends State<MailboxScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w500,
+                                fontWeight:
+                                    isUnread ? FontWeight.w700 : FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                             ),
@@ -843,25 +1288,26 @@ class _MailboxScreenState extends State<MailboxScreen> {
                             _formatTime(email.createTime),
                             style: TextStyle(
                               fontSize: 12,
-                              color: cs.onSurfaceVariant,
+                              fontWeight:
+                                  isUnread ? FontWeight.w600 : FontWeight.w400,
+                              color: isUnread ? cs.primary : cs.onSurfaceVariant,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 2),
-                      // 第二行：主题
                       Text(
                         email.subject,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontWeight:
+                              isUnread ? FontWeight.w700 : FontWeight.w500,
                           color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      // 第三行：预览
                       Row(
                         children: [
                           if (hasAttachment) ...[
@@ -879,6 +1325,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 13,
+                                fontWeight: FontWeight.w400,
                                 color: cs.onSurfaceVariant,
                               ),
                             ),
@@ -898,7 +1345,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   // ==================== Apple 风格邮件列表 ====================
   Widget _buildAppleEmailList() {
-    final cs = Theme.of(context).colorScheme;
     final emails = _filteredEmails;
     return ListView.separated(
       controller: _scrollController,
@@ -935,9 +1381,12 @@ class _MailboxScreenState extends State<MailboxScreen> {
             : email.sendEmail.split('@').first);
     final accountColor =
         AppTheme.accountColor(email.isSent ? email.toEmail : email.sendEmail);
+    final isSelected = _selectedEmailIds.contains(email.emailId);
+    final isUnread = !email.isRead && email.isReceived;
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
+      direction: _selectMode ? DismissDirection.none : DismissDirection.horizontal,
       background: Container(
         color: cs.primary,
         alignment: Alignment.centerLeft,
@@ -965,87 +1414,127 @@ class _MailboxScreenState extends State<MailboxScreen> {
           _deleteEmail(email);
         }
       },
-      child: InkWell(
-        onTap: () => _openEmail(email),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 圆形头像
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: accountColor,
-                child: Text(
-                  senderName.isNotEmpty
-                      ? senderName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
+      child: Material(
+        color: isSelected ? cs.primaryContainer.withOpacity(0.3) : Colors.transparent,
+        child: InkWell(
+          onTap: () => _openEmail(email),
+          onLongPress: () {
+            if (!_selectMode) {
+              _enterSelectMode();
+              _toggleSelect(email.emailId);
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 未读小点点
+                Container(
+                  width: 12,
+                  margin: const EdgeInsets.only(top: 18, right: 4),
+                  alignment: Alignment.center,
+                  child: isUnread
+                      ? Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
-              ),
-              const SizedBox(width: 12),
-              // 主体
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            senderName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: cs.onSurface,
+                // 选择框
+                if (_selectMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 8),
+                    child: Icon(
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      size: 22,
+                      color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                  )
+                else
+                  // 圆形头像
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: accountColor,
+                    child: Text(
+                      senderName.isNotEmpty
+                          ? senderName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                // 主体
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              senderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (email.isStarred)
-                          Icon(Icons.star, size: 14, color: cs.tertiary),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatTime(email.createTime),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant,
+                          const SizedBox(width: 8),
+                          if (email.isStarred)
+                            Icon(Icons.star, size: 14, color: cs.tertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatTime(email.createTime),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight:
+                                  isUnread ? FontWeight.w600 : FontWeight.w400,
+                              color: isUnread ? cs.primary : cs.onSurfaceVariant,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        email.subject,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+                          color: cs.onSurface,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      email.subject,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: cs.onSurface,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _getPreview(email),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: cs.onSurfaceVariant,
-                        height: 1.3,
+                      const SizedBox(height: 2),
+                      Text(
+                        _getPreview(email),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurfaceVariant,
+                          height: 1.3,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1064,7 +1553,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            // 账户头部
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),

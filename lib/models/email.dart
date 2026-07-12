@@ -61,6 +61,7 @@ class Email {
   bool get isSent => type == 1;
   bool get isStarred => isStar == 1;
   bool get isDeleted => isDel == 1 || isDel == 2;
+  bool get isRead => status == 1;
 
   /// 序列化为 JSON，用于本地缓存
   Map<String, dynamic> toJson() => {

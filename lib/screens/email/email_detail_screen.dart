@@ -28,12 +28,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   bool _isStarred = false;
   bool _loading = false;
 
-  // 邮件正文缩放倍率（InteractiveViewer），双指自由缩放整个内容
   double _contentScale = 1.0;
-  // InteractiveViewer 的变换控制器，用于菜单按钮缩放
   late final TransformationController _transformController;
-  static const double _minScale = 0.75;
-  static const double _maxScale = 3.0;
+  static const double _minScale = 0.5;
+  static const double _maxScale = 5.0;
 
   @override
   void initState() {
@@ -41,6 +39,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     _email = widget.email;
     _isStarred = _email.isStarred;
     _transformController = TransformationController();
+    _markAsRead();
   }
 
   @override
@@ -49,10 +48,17 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     super.dispose();
   }
 
-  /// 菜单按钮缩放
+  Future<void> _markAsRead() async {
+    if (_email.isRead) return;
+    try {
+      await widget.api.markAsRead([_email.emailId]);
+    } catch (_) {}
+  }
+
   void _zoomBy(double factor) {
-    final newScale = (_contentScale * factor).clamp(_minScale, _maxScale);
-    if (newScale == _contentScale) return;
+    final currentScale = _transformController.value.getMaxScaleOnAxis();
+    final newScale = (currentScale * factor).clamp(_minScale, _maxScale);
+    if (newScale == currentScale) return;
     setState(() => _contentScale = newScale);
     _transformController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
   }
@@ -62,7 +68,6 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     _transformController.value = Matrix4.identity();
   }
 
-  /// 把邮件正文（含纯文本）拷贝到剪贴板
   Future<void> _copyEmailContent() async {
     final plain = _email.text.isNotEmpty
         ? _email.text
@@ -76,23 +81,6 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('邮件内容已复制')),
       );
-    }
-  }
-
-  String _formatTime(String timeStr) {
-    try {
-      final dt = DateTime.parse(timeStr);
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inDays == 0 && now.day == dt.day) {
-        return DateFormat('HH:mm').format(dt);
-      } else if (diff.inDays < 7) {
-        return '${diff.inDays}天前';
-      } else {
-        return DateFormat('MM-dd HH:mm').format(dt);
-      }
-    } catch (e) {
-      return timeStr;
     }
   }
 
@@ -205,16 +193,33 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部导航栏
+            // ===== 固定顶部操作栏 =====
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
               child: Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 22),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(
+                      _folderLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
                   IconButton(
                     icon: Icon(
                       _isStarred ? Icons.star_rounded : Icons.star_border_rounded,
@@ -222,10 +227,12 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                       size: 24,
                     ),
                     onPressed: _loading ? null : _toggleStar,
+                    tooltip: _isStarred ? '取消星标' : '星标',
                   ),
                   IconButton(
                     icon: const Icon(Icons.reply_rounded, size: 22),
                     onPressed: _reply,
+                    tooltip: '回复',
                   ),
                   PopupMenuButton<String>(
                     onSelected: (value) {
@@ -237,10 +244,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                           _copyEmailContent();
                           break;
                         case 'zoom_in':
-                          _zoomBy(1.2);
+                          _zoomBy(1.25);
                           break;
                         case 'zoom_out':
-                          _zoomBy(1 / 1.2);
+                          _zoomBy(1 / 1.25);
                           break;
                         case 'zoom_reset':
                           _zoomReset();
@@ -261,7 +268,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         child: Row(children: [
                           Icon(Icons.zoom_in_outlined, size: 20),
                           SizedBox(width: 8),
-                          Text('放大正文'),
+                          Text('放大'),
                         ]),
                       ),
                       const PopupMenuItem(
@@ -269,7 +276,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         child: Row(children: [
                           Icon(Icons.zoom_out_outlined, size: 20),
                           SizedBox(width: 8),
-                          Text('缩小正文'),
+                          Text('缩小'),
                         ]),
                       ),
                       const PopupMenuItem(
@@ -294,34 +301,38 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                 ],
               ),
             ),
-            // 邮件内容
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+            // ===== 邮件头部信息（主题、发件人）=====
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 主题（大标题）
                   Text(
                     _email.subject,
                     style: TextStyle(
-                      fontSize: isGoogle ? 22 : 24,
+                      fontSize: isGoogle ? 20 : 22,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
                       color: cs.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  // 发件人信息
+                  const SizedBox(height: 12),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 头像：Google 方形圆角，Apple 圆形
                       isGoogle
                           ? Container(
-                              width: 44,
-                              height: 44,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 color: accountColor,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Center(
                                 child: Text(
@@ -331,13 +342,13 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w500,
-                                    fontSize: 16,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ),
                             )
                           : CircleAvatar(
-                              radius: 22,
+                              radius: 20,
                               backgroundColor: accountColor,
                               child: Text(
                                 displayName.isNotEmpty
@@ -346,7 +357,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 16,
+                                  fontSize: 15,
                                 ),
                               ),
                             ),
@@ -358,7 +369,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                             Text(
                               displayName,
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
                                 color: cs.onSurface,
                               ),
@@ -386,212 +397,90 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                           ],
                         ),
                       ),
-                      // 收件人标签
-                      if (_email.isSent)
-                        Container(
-                          margin: const EdgeInsets.only(top: 2),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '发给 $displayName',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
-                  // 附件
                   if (_email.attList != null && _email.attList!.isNotEmpty) ...[
-                    _buildAttachments(isDark),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    _buildAttachmentsMini(isDark),
                   ],
-                  // 邮件正文
-                  _buildEmailContent(isDark),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-      // 底部操作栏
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border: Border(
-            top: BorderSide(
-              color: cs.outlineVariant,
-              width: 0.5,
+            // ===== 邮件正文（占满剩余空间，支持双指缩放）=====
+            Expanded(
+              child: _buildEmailContent(isDark),
             ),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildActionButton(
-                icon: Icons.reply_rounded,
-                label: '回复',
-                onTap: _reply,
-              ),
-              _buildActionButton(
-                icon: Icons.forward_rounded,
-                label: '转发',
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  '/compose',
-                  arguments: {
-                    'api': widget.api,
-                    'forwardEmail': _email,
-                  },
+            // ===== 底部缩放指示器 =====
+            if (_contentScale != 1.0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant.withOpacity(0.5),
+                  border: Border(
+                    top: BorderSide(color: cs.outlineVariant, width: 0.5),
+                  ),
                 ),
-              ),
-              _buildActionButton(
-                icon: _isStarred
-                    ? Icons.star_rounded
-                    : Icons.star_border_rounded,
-                label: _isStarred ? '已星标' : '星标',
-                color: _isStarred ? cs.tertiary : null,
-                onTap: _loading ? null : _toggleStar,
-              ),
-              _buildActionButton(
-                icon: Icons.delete_outline_rounded,
-                label: '删除',
-                color: cs.error,
-                onTap: _deleteEmail,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onTap,
-    Color? color,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 22, color: color ?? cs.primary),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color ?? cs.primary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachments(bool isDark) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.attach_file, size: 18, color: cs.primary),
-              const SizedBox(width: 8),
-              Text(
-                '${_email.attList!.length} 个附件',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ..._email.attList!.map((att) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _getIconForFile(att.fileName),
-                      size: 20,
-                      color: cs.primary,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            att.fileName,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: cs.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            _formatFileSize(att.fileSize),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
+                    Text(
+                      '${(_contentScale * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.download, size: 20),
-                      onPressed: () async {
-                        if (att.url != null && att.url!.isNotEmpty) {
-                          try {
-                            await launchUrl(Uri.parse(att.url!),
-                                mode: LaunchMode.externalApplication);
-                          } catch (_) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('附件地址暂不可用')),
-                              );
-                            }
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('附件地址暂不可用')),
-                          );
-                        }
-                      },
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: _zoomReset,
+                      child: Text(
+                        '重置',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              )),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _folderLabel {
+    if (_email.isSent) return '已发送';
+    return '邮件详情';
+  }
+
+  Widget _buildAttachmentsMini(bool isDark) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.attach_file, size: 16, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${_email.attList!.length} 个附件',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                color: cs.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -623,28 +512,24 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
       );
     }
 
-    // InteractiveViewer：仅双指捏合缩放，单指拖动交给 ListView 滚动
-    // - panEnabled: false → 单指无法拖动内容（不会"划到太平洋"）
-    // - scaleEnabled: true → 双指可自由缩放
-    // - boundaryMargin: zero → 缩放后内容不偏移
-    // SelectionArea：长按文字弹出系统级 复制/分享/全选 菜单
-    return Container(
-      width: double.infinity,
-      child: ClipRect(
-        child: InteractiveViewer(
-          transformationController: _transformController,
-          minScale: _minScale,
-          maxScale: _maxScale,
-          panEnabled: false,
-          scaleEnabled: true,
-          boundaryMargin: EdgeInsets.zero,
-          alignment: Alignment.topCenter,
-          onInteractionEnd: (details) {
-            final scale = _transformController.value.getMaxScaleOnAxis();
-            if ((scale - _contentScale).abs() > 0.01) {
-              _contentScale = scale;
-            }
-          },
+    return InteractiveViewer(
+      transformationController: _transformController,
+      minScale: _minScale,
+      maxScale: _maxScale,
+      panEnabled: true,
+      scaleEnabled: true,
+      boundaryMargin: const EdgeInsets.all(double.infinity),
+      alignment: Alignment.topCenter,
+      onInteractionEnd: (details) {
+        final scale = _transformController.value.getMaxScaleOnAxis();
+        if ((scale - _contentScale).abs() > 0.01) {
+          setState(() => _contentScale = scale);
+        }
+      },
+      child: SingleChildScrollView(
+        child: Container(
+          width: MediaQuery.of(context).size.width,
+          padding: const EdgeInsets.all(16),
           child: hasHtml
               ? SelectionArea(
                   child: HtmlWidget(
@@ -675,30 +560,5 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
         ),
       ),
     );
-  }
-
-  IconData _getIconForFile(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].contains(ext)) {
-      return Icons.image;
-    }
-    if (['pdf'].contains(ext)) return Icons.picture_as_pdf;
-    if (['doc', 'docx'].contains(ext)) return Icons.description;
-    if (['xls', 'xlsx'].contains(ext)) return Icons.table_chart;
-    if (['zip', 'rar', '7z'].contains(ext)) return Icons.folder_zip;
-    if (['mp3', 'wav', 'flac'].contains(ext)) return Icons.audio_file;
-    if (['mp4', 'mov', 'avi'].contains(ext)) return Icons.video_file;
-    return Icons.attach_file;
-  }
-
-  String _formatFileSize(String sizeStr) {
-    try {
-      final bytes = int.parse(sizeStr);
-      if (bytes < 1024) return '$bytes B';
-      if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    } catch (e) {
-      return sizeStr;
-    }
   }
 }
