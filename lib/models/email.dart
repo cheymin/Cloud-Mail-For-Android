@@ -163,7 +163,7 @@ class ApiResponse<T> {
     this.data,
   });
 
-  bool get isSuccess => code == 200;
+  bool get isSuccess => code >= 200 && code < 300;
 
   factory ApiResponse.fromJson(Map<String, dynamic> json, T Function(dynamic)? dataParser) {
     T? parsedData;

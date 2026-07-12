@@ -22,7 +22,7 @@ class MailboxScreen extends StatefulWidget {
 
 /// 邮件文件夹
 /// - [all] 跨账户的全部邮件（用 allReceive=1 拉取，所有账户收到的邮件）
-enum MailFolder { all, inbox, sent, starred, trash }
+enum MailFolder { inbox, sent, starred, trash }
 
 class _MailboxScreenState extends State<MailboxScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -92,7 +92,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   int get _emailType {
     switch (_currentFolder) {
-      case MailFolder.all:
       case MailFolder.inbox:
       case MailFolder.starred:
       case MailFolder.trash:
@@ -104,8 +103,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   String get _folderTitle {
     switch (_currentFolder) {
-      case MailFolder.all:
-        return '全部邮件';
       case MailFolder.inbox:
         return '收件箱';
       case MailFolder.sent:
