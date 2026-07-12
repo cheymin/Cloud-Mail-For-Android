@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../services/ai_service.dart';
 import '../../services/contact_sync.dart';
+import '../../services/app_sync.dart';
 import '../../services/webdav_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
@@ -152,11 +153,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _syncContacts() async {
     setState(() => _syncing = true);
-    final result = await ContactSync.sync();
+    final messages = <String>[];
+
+    // 1. 同步联系人
+    final contactResult = await ContactSync.sync();
+    messages.add(contactResult.message);
+
+    // 2. 同步应用设置
+    final settingsResult = await AppSync.uploadSettings();
+    messages.add(settingsResult.message);
+
     if (mounted) {
       setState(() => _syncing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
+        SnackBar(content: Text(messages.join('；'))),
       );
     }
   }

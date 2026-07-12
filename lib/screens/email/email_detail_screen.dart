@@ -30,7 +30,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
 
   double _contentScale = 1.0;
   late final TransformationController _transformController;
-  static const double _minScale = 0.5;
+  static const double _minScale = 0.3;
   static const double _maxScale = 5.0;
 
   @override
@@ -301,114 +301,48 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                 ],
               ),
             ),
-            // ===== 邮件头部信息（主题、发件人）=====
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                border: Border(
-                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _email.subject,
-                    style: TextStyle(
-                      fontSize: isGoogle ? 20 : 22,
-                      fontWeight: FontWeight.bold,
-                      height: 1.3,
-                      color: cs.onSurface,
+            // ===== InteractiveViewer 包裹整个内容（邮件头部 + 邮件正文，一起缩放）=====
+            Expanded(
+              child: InteractiveViewer(
+                transformationController: _transformController,
+                minScale: _minScale,
+                maxScale: _maxScale,
+                panEnabled: true,
+                scaleEnabled: true,
+                boundaryMargin: const EdgeInsets.all(double.infinity),
+                alignment: Alignment.topCenter,
+                onInteractionEnd: (details) {
+                  final scale =
+                      _transformController.value.getMaxScaleOnAxis();
+                  if ((scale - _contentScale).abs() > 0.01) {
+                    setState(() => _contentScale = scale);
+                  }
+                },
+                child: SingleChildScrollView(
+                  child: Container(
+                    width: MediaQuery.of(context).size.width,
+                    color: cs.surface,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildEmailHeader(
+                          cs: cs,
+                          isGoogle: isGoogle,
+                          isDark: isDark,
+                          senderEmail: senderEmail,
+                          displayName: displayName,
+                          accountColor: accountColor,
+                        ),
+                        Container(
+                          height: 0.5,
+                          color: cs.outlineVariant,
+                        ),
+                        _buildEmailBody(isDark),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      isGoogle
-                          ? Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: accountColor,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  displayName.isNotEmpty
-                                      ? displayName[0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : CircleAvatar(
-                              radius: 20,
-                              backgroundColor: accountColor,
-                              child: Text(
-                                displayName.isNotEmpty
-                                    ? displayName[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              senderEmail,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: cs.onSurfaceVariant,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _formatFullTime(_email.createTime),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_email.attList != null && _email.attList!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildAttachmentsMini(isDark),
-                  ],
-                ],
+                ),
               ),
-            ),
-            // ===== 邮件正文（占满剩余空间，支持双指缩放）=====
-            Expanded(
-              child: _buildEmailContent(isDark),
             ),
             // ===== 底部缩放指示器 =====
             if (_contentScale != 1.0)
@@ -486,79 +420,179 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     );
   }
 
-  Widget _buildEmailContent(bool isDark) {
+  Widget _buildEmailHeader({
+    required ColorScheme cs,
+    required bool isGoogle,
+    required bool isDark,
+    required String senderEmail,
+    required String displayName,
+    required Color accountColor,
+  }) {
+    final recipientName = _email.toName;
+    final recipientEmail = _email.toEmail;
+    final recipientDisplay = recipientName.isNotEmpty
+        ? (recipientEmail.isNotEmpty
+            ? '$recipientName <$recipientEmail>'
+            : recipientName)
+        : (recipientEmail.isNotEmpty ? recipientEmail : '（无）');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _email.subject,
+            style: TextStyle(
+              fontSize: isGoogle ? 20 : 22,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+              color: cs.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              isGoogle
+                  ? Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: accountColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          displayName.isNotEmpty
+                              ? displayName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    )
+                  : CircleAvatar(
+                      radius: 20,
+                      backgroundColor: accountColor,
+                      child: Text(
+                        displayName.isNotEmpty
+                            ? displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      senderEmail,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatFullTime(_email.createTime),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '收件人: $recipientDisplay',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_email.attList != null && _email.attList!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildAttachmentsMini(isDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmailBody(bool isDark) {
     final cs = Theme.of(context).colorScheme;
     final content = _email.content;
     final hasHtml = content.contains('<') && content.contains('>');
 
     if (!hasHtml && content.trim().isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            children: [
-              Icon(Icons.drafts_outlined,
-                  size: 48, color: cs.onSurfaceVariant.withOpacity(0.3)),
-              const SizedBox(height: 12),
-              Text(
-                '这封邮件是空的',
-                style: TextStyle(
-                  color: cs.onSurfaceVariant.withOpacity(0.5),
-                ),
+      return Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          children: [
+            Icon(Icons.drafts_outlined,
+                size: 48, color: cs.onSurfaceVariant.withOpacity(0.3)),
+            const SizedBox(height: 12),
+            Text(
+              '这封邮件是空的',
+              style: TextStyle(
+                color: cs.onSurfaceVariant.withOpacity(0.5),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
 
-    return InteractiveViewer(
-      transformationController: _transformController,
-      minScale: _minScale,
-      maxScale: _maxScale,
-      panEnabled: true,
-      scaleEnabled: true,
-      boundaryMargin: const EdgeInsets.all(double.infinity),
-      alignment: Alignment.topCenter,
-      onInteractionEnd: (details) {
-        final scale = _transformController.value.getMaxScaleOnAxis();
-        if ((scale - _contentScale).abs() > 0.01) {
-          setState(() => _contentScale = scale);
-        }
-      },
-      child: SingleChildScrollView(
-        child: Container(
-          width: MediaQuery.of(context).size.width,
-          padding: const EdgeInsets.all(16),
-          child: hasHtml
-              ? SelectionArea(
-                  child: HtmlWidget(
-                    content,
-                    onTapUrl: (url) async {
-                      final uri = Uri.parse(url);
-                      try {
-                        await launchUrl(uri,
-                            mode: LaunchMode.externalApplication);
-                      } catch (_) {}
-                      return true;
-                    },
-                    textStyle: TextStyle(
-                      fontSize: 15,
-                      height: 1.6,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                )
-              : SelectableText(
-                  content,
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.6,
-                    color: cs.onSurface,
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: hasHtml
+          ? SelectionArea(
+              child: HtmlWidget(
+                content,
+                onTapUrl: (url) async {
+                  final uri = Uri.parse(url);
+                  try {
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
+                  } catch (_) {}
+                  return true;
+                },
+                textStyle: TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                  color: cs.onSurface,
                 ),
-        ),
-      ),
+              ),
+            )
+          : SelectableText(
+              content,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: cs.onSurface,
+              ),
+            ),
     );
   }
 }

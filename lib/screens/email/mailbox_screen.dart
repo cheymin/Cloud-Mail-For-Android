@@ -21,7 +21,6 @@ class MailboxScreen extends StatefulWidget {
 }
 
 /// 邮件文件夹
-/// - [all] 跨账户的全部邮件（用 allReceive=1 拉取，所有账户收到的邮件）
 enum MailFolder { inbox, sent, starred, trash }
 
 class _MailboxScreenState extends State<MailboxScreen> {
@@ -115,10 +114,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   String get _cacheKey => _currentFolder.name;
-
-  bool get _isAllFolder => _currentFolder == MailFolder.all;
-
-  int? get _allReceive => _isAllFolder ? 1 : null;
 
   int? get _queryAccountId => StorageService.currentAccountId;
 
@@ -216,7 +211,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
           size: 20,
           timeSort: 0,
           isDel: isDel,
-          allReceive: _allReceive,
         );
         if (response.isSuccess && response.data != null) {
           final fresh = response.data!.list;
@@ -278,7 +272,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
           emailId: _lastEmailId,
           timeSort: 0,
           isDel: isDel,
-          allReceive: _allReceive,
         );
         if (response.isSuccess && response.data != null) {
           setState(() {
@@ -1620,11 +1613,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                 children: [
                   _buildSectionLabel('邮箱'),
                   _buildDrawerItem(
-                    icon: Icons.all_inbox_outlined,
-                    title: '全部邮件',
-                    folder: MailFolder.all,
-                  ),
-                  _buildDrawerItem(
                     icon: Icons.inbox_outlined,
                     title: '收件箱',
                     folder: MailFolder.inbox,
@@ -1851,10 +1839,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     IconData icon;
     String text;
     switch (_currentFolder) {
-      case MailFolder.all:
-        icon = Icons.all_inbox_outlined;
-        text = '还没有任何邮件';
-        break;
       case MailFolder.inbox:
         icon = Icons.inbox_outlined;
         text = '收件箱为空';

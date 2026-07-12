@@ -7,7 +7,7 @@ import '../../services/update_service.dart';
 /// 设计目标：
 /// - 顶部：应用图标 + 当前版本
 /// - 状态卡片：是否最新 / 发现新版本
-/// - 全部已发布版本列表，每项带下载按钮，用户手动选择下载
+/// - 最新版本详情卡片（版本号、发布日期、APK大小、完整更新说明、下载按钮）
 /// - 无 release / 限流 / 网络错误 → 明确状态提示，不闪退
 class UpdateScreen extends StatefulWidget {
   final String currentVersion;
@@ -91,7 +91,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
     final rawUrl = r.apkUrl;
     final hasApk = rawUrl != null && rawUrl.isNotEmpty;
     final downloadUrl = hasApk
-        ? rawUrl!
+        ? rawUrl
         : (r.htmlUrl.isNotEmpty
             ? r.htmlUrl
             : '${UpdateService.repoUrl}/releases');
@@ -296,43 +296,20 @@ class _UpdateScreenState extends State<UpdateScreen> {
         ),
       ],
 
-      // ===== 全部已发布版本（用户手动选择下载） =====
-      if (all.isNotEmpty) ...[
+      // ===== 最新版本详情卡片（仅显示最新版本） =====
+      if (latest != null) ...[
         const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Text(
-                '全部版本',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '共 ${all.length} 个',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           child: Text(
-            '点击下方任意版本即可下载安装包',
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurfaceVariant.withOpacity(0.7),
-            ),
+            '最新版本',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
           ),
         ),
-        const SizedBox(height: 4),
-        ...all.map((r) => _buildReleaseItem(cs, r, isLatest: r == latest)),
+        const SizedBox(height: 8),
+        _buildReleaseItem(cs, latest, isLatest: true),
         const SizedBox(height: 16),
       ],
 
@@ -363,7 +340,6 @@ class _UpdateScreenState extends State<UpdateScreen> {
     ReleaseInfo? latest,
     bool noReleases,
   ) {
-    final isLatest = !hasUpdate && !noReleases;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -541,8 +517,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
               const SizedBox(height: 8),
               Text(
                 r.body,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                maxLines: null,
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,

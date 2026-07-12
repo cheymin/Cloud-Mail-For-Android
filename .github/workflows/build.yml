@@ -84,30 +84,45 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Generate release notes from commits
+        id: release_notes
+        run: |
+          # 获取上一个 tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            # 没有上一个 tag，取所有提交
+            NOTES=$(git log --pretty=format:"- %s" --no-merges -20)
+          else
+            # 取从上一个 tag 到现在的提交
+            NOTES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          fi
+          # 转义换行，写入 GITHUB_OUTPUT
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "NOTES<<${EOF}" >> $GITHUB_OUTPUT
+          echo "${NOTES}" >> $GITHUB_OUTPUT
+          echo "${EOF}" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
+          generate_release_notes: true
           body: |
-            ## Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
+            ## 🚀 更新内容
 
-            ### 🚀 更新内容
+            ${{ steps.release_notes.outputs.NOTES }}
 
-            ### 📦 下载说明
+            ## 📦 下载
+
             - `app-release.apk` - 正式版（已签名，推荐安装）
 
-            ### 🔑 签名信息
-            - Keystore 密码: `cloudmail123`
-            - Key 别名: `cloudmail`
-            - Key 密码: `cloudmail123`
-
-            ### 💡 使用方法
+            ## 💡 使用方法
             1. 下载 `app-release.apk` 到 Android 设备
             2. 允许安装未知来源应用
             3. 安装并打开应用
-            4. 输入 Cloud Mail 服务器地址（如 `https://your-domain.com/`）
-            5. 使用管理员邮箱和密码登录
+            4. 输入 Cloud Mail 服务器地址
+            5. 使用邮箱和密码登录
           draft: false
           prerelease: false
           files: |
