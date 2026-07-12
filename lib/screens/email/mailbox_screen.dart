@@ -159,13 +159,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     }).toList();
   }
 
-  // 未读邮件数量
-  int get _unreadCount {
-    return _emails.where((e) => !e.isRead && e.isReceived).length;
-  }
-
-
-
   Future<void> _loadEmails() async {
     _exitSelectMode();
 
@@ -305,31 +298,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     );
     if (result == true) {
       _loadEmails();
-    } else {
-      // 标记为已读（本地状态更新）
-      setState(() {
-        final idx = _emails.indexWhere((e) => e.emailId == email.emailId);
-        if (idx >= 0 && !_emails[idx].isRead) {
-          final old = _emails[idx];
-          _emails[idx] = Email(
-            emailId: old.emailId,
-            sendEmail: old.sendEmail,
-            sendName: old.sendName,
-            subject: old.subject,
-            toEmail: old.toEmail,
-            toName: old.toName,
-            createTime: old.createTime,
-            type: old.type,
-            content: old.content,
-            text: old.text,
-            isDel: old.isDel,
-            isStar: old.isStar,
-            status: 1,
-            messageId: old.messageId,
-            attList: old.attList,
-          );
-        }
-      });
     }
   }
 
@@ -420,105 +388,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('删除失败: ${response.message}')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorMessages.fromException(e))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _batchLoading = false);
-    }
-  }
-
-  Future<void> _batchMarkRead() async {
-    if (_selectedEmailIds.isEmpty || _batchLoading) return;
-    setState(() => _batchLoading = true);
-    try {
-      final ids = _selectedEmailIds.toList();
-      final response = await widget.api.markAsRead(ids);
-      if (response.isSuccess) {
-        setState(() {
-          for (int i = 0; i < _emails.length; i++) {
-            if (_selectedEmailIds.contains(_emails[i].emailId)) {
-              final old = _emails[i];
-              _emails[i] = Email(
-                emailId: old.emailId,
-                sendEmail: old.sendEmail,
-                sendName: old.sendName,
-                subject: old.subject,
-                toEmail: old.toEmail,
-                toName: old.toName,
-                createTime: old.createTime,
-                type: old.type,
-                content: old.content,
-                text: old.text,
-                isDel: old.isDel,
-                isStar: old.isStar,
-                status: 1,
-                messageId: old.messageId,
-                attList: old.attList,
-              );
-            }
-          }
-          _selectedEmailIds.clear();
-          _selectMode = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('已标记为已读')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorMessages.fromException(e))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _batchLoading = false);
-    }
-  }
-
-  Future<void> _markAllAsRead() async {
-    final unreadEmails = _filteredEmails.where((e) => !e.isRead).toList();
-    if (unreadEmails.isEmpty) return;
-    setState(() => _batchLoading = true);
-    try {
-      final ids = unreadEmails.map((e) => e.emailId).toList();
-      final response = await widget.api.markAsRead(ids);
-      if (response.isSuccess) {
-        setState(() {
-          for (int i = 0; i < _emails.length; i++) {
-            if (!_emails[i].isRead) {
-              final old = _emails[i];
-              _emails[i] = Email(
-                emailId: old.emailId,
-                sendEmail: old.sendEmail,
-                sendName: old.sendName,
-                subject: old.subject,
-                toEmail: old.toEmail,
-                toName: old.toName,
-                createTime: old.createTime,
-                type: old.type,
-                content: old.content,
-                text: old.text,
-                isDel: old.isDel,
-                isStar: old.isStar,
-                status: 1,
-                messageId: old.messageId,
-                attList: old.attList,
-              );
-            }
-          }
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('全部已标记为已读')),
           );
         }
       }
@@ -677,11 +546,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     ),
                   ),
                   const Spacer(),
-                  TextButton.icon(
-                    onPressed: _batchLoading ? null : _batchMarkRead,
-                    icon: const Icon(Icons.done_all_outlined, size: 18),
-                    label: const Text('已读'),
-                  ),
                   TextButton.icon(
                     onPressed: _batchLoading ? null : _batchDelete,
                     icon: const Icon(Icons.delete_outline, size: 18),
@@ -887,25 +751,11 @@ class _MailboxScreenState extends State<MailboxScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (_unreadCount > 0 &&
-                    _currentFolder != MailFolder.sent &&
-                    _currentFolder != MailFolder.trash)
-                  TextButton.icon(
-                    onPressed: _batchLoading ? null : _markAllAsRead,
-                    icon: const Icon(Icons.done_all_outlined, size: 18),
-                    label: Text('全部已读 ($_unreadCount)'),
-                    style: TextButton.styleFrom(
-                      textStyle: const TextStyle(fontSize: 13),
-                    ),
-                  ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {
                       case 'select':
                         _enterSelectMode();
-                        break;
-                      case 'markAllRead':
-                        _markAllAsRead();
                         break;
                       case 'refresh':
                         _loadEmails();
@@ -921,16 +771,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                         Text('选择邮件'),
                       ]),
                     ),
-                    if (_currentFolder != MailFolder.sent &&
-                        _currentFolder != MailFolder.trash)
-                      const PopupMenuItem(
-                        value: 'markAllRead',
-                        child: Row(children: [
-                          Icon(Icons.done_all_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('全部标记为已读'),
-                        ]),
-                      ),
                     const PopupMenuItem(
                       value: 'refresh',
                       child: Row(children: [
@@ -1025,9 +865,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     case 'select':
                       _enterSelectMode();
                       break;
-                    case 'markAllRead':
-                      _markAllAsRead();
-                      break;
                     case 'refresh':
                       _loadEmails();
                       break;
@@ -1042,16 +879,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
                       Text('选择邮件'),
                     ]),
                   ),
-                  if (_currentFolder != MailFolder.sent &&
-                      _currentFolder != MailFolder.trash)
-                    const PopupMenuItem(
-                      value: 'markAllRead',
-                      child: Row(children: [
-                        Icon(Icons.done_all_outlined, size: 20),
-                        SizedBox(width: 8),
-                        Text('全部标记为已读'),
-                      ]),
-                    ),
                   const PopupMenuItem(
                     value: 'refresh',
                     child: Row(children: [
@@ -1142,7 +969,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final hasAttachment =
         email.attList != null && email.attList!.isNotEmpty;
     final isSelected = _selectedEmailIds.contains(email.emailId);
-    final isUnread = !email.isRead && email.isReceived;
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
@@ -1194,22 +1020,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 未读小点点
-                Container(
-                  width: 10,
-                  margin: const EdgeInsets.only(top: 14, right: 8),
-                  alignment: Alignment.center,
-                  child: isUnread
-                      ? Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
                 // 选择框
                 if (_selectMode)
                   Padding(
@@ -1250,10 +1060,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
                       senderName.isNotEmpty
                           ? senderName[0].toUpperCase()
                           : '?',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontWeight:
-                            isUnread ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: FontWeight.w500,
                         fontSize: 16,
                       ),
                     ),
@@ -1274,8 +1083,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 15,
-                                fontWeight:
-                                    isUnread ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                             ),
@@ -1285,9 +1093,8 @@ class _MailboxScreenState extends State<MailboxScreen> {
                             _formatTime(email.createTime),
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight:
-                                  isUnread ? FontWeight.w600 : FontWeight.w400,
-                              color: isUnread ? cs.primary : cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -1299,8 +1106,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight:
-                              isUnread ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: FontWeight.w500,
                           color: cs.onSurface,
                         ),
                       ),
@@ -1379,7 +1185,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
     final accountColor =
         AppTheme.accountColor(email.isSent ? email.toEmail : email.sendEmail);
     final isSelected = _selectedEmailIds.contains(email.emailId);
-    final isUnread = !email.isRead && email.isReceived;
 
     return Dismissible(
       key: ValueKey('email-${email.emailId}'),
@@ -1426,22 +1231,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 未读小点点
-                Container(
-                  width: 12,
-                  margin: const EdgeInsets.only(top: 18, right: 4),
-                  alignment: Alignment.center,
-                  child: isUnread
-                      ? Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
                 // 选择框
                 if (_selectMode)
                   Padding(
@@ -1463,9 +1252,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
                       senderName.isNotEmpty
                           ? senderName[0].toUpperCase()
                           : '?',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
                     ),
@@ -1485,7 +1274,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                                fontWeight: FontWeight.w600,
                                 color: cs.onSurface,
                               ),
                             ),
@@ -1498,9 +1287,8 @@ class _MailboxScreenState extends State<MailboxScreen> {
                             _formatTime(email.createTime),
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight:
-                                  isUnread ? FontWeight.w600 : FontWeight.w400,
-                              color: isUnread ? cs.primary : cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -1512,7 +1300,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight: FontWeight.w500,
                           color: cs.onSurface,
                         ),
                       ),

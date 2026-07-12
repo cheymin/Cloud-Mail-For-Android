@@ -150,15 +150,6 @@ class CloudMailApi {
     return _parseResponse(response, null);
   }
 
-  Future<ApiResponse> markAsRead(List<int> emailIds) async {
-    final response = await http.put(
-      Uri.parse(_url('/email/read')),
-      headers: _headers,
-      body: jsonEncode({'emailIds': emailIds.join(',')}),
-    );
-    return _parseResponse(response, null);
-  }
-
   Future<ApiResponse<List<Email>>> sendEmail({
     required int accountId,
     required List<String> receiveEmail,

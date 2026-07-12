@@ -39,20 +39,12 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     _email = widget.email;
     _isStarred = _email.isStarred;
     _transformController = TransformationController();
-    _markAsRead();
   }
 
   @override
   void dispose() {
     _transformController.dispose();
     super.dispose();
-  }
-
-  Future<void> _markAsRead() async {
-    if (_email.isRead) return;
-    try {
-      await widget.api.markAsRead([_email.emailId]);
-    } catch (_) {}
   }
 
   void _zoomBy(double factor) {

@@ -84,34 +84,24 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Generate release notes from commits
-        id: release_notes
-        run: |
-          # 获取上一个 tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            # 没有上一个 tag，取所有提交
-            NOTES=$(git log --pretty=format:"- %s" --no-merges -20)
-          else
-            # 取从上一个 tag 到现在的提交
-            NOTES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
-          fi
-          # 转义换行，写入 GITHUB_OUTPUT
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "NOTES<<${EOF}" >> $GITHUB_OUTPUT
-          echo "${NOTES}" >> $GITHUB_OUTPUT
-          echo "${EOF}" >> $GITHUB_OUTPUT
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
-          generate_release_notes: true
           body: |
             ## 🚀 更新内容
 
-            ${{ steps.release_notes.outputs.NOTES }}
+            - 应用内直接下载更新：支持镜像源测速、自定义添加镜像、下载进度条、下载完成自动弹出安装
+            - 移除已读/未读功能及相关 UI（未读小圆点、批量标记已读、全部已读）
+            - 初始化流程新增个性化设置步骤（界面风格、深色模式、OpenAI、WebDAV），可跳过，完成后烟花动画
+            - WebDAV 同步支持全量应用设置（界面、主题、OpenAI、个性化等）
+            - 邮件详情页支持全区域浏览器式缩放（头部+正文一起缩放）
+            - 修复时间显示异常（0天前、0:16、一天前）
+            - 移除"全部邮件"文件夹，避免显示已删除邮件
+            - 更新页面只显示最新版本
+            - 修复批量标记已读失效、星标/垃圾箱邮件异常消失等问题
+            - 修复 GitHub token 泄露
 
             ## 📦 下载
 

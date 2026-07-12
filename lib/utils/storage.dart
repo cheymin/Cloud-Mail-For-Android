@@ -185,6 +185,24 @@ class StorageService {
     }
   }
 
+  // ===== 更新镜像源 =====
+  // 自定义/内置的下载镜像源列表（JSON 数组字符串）
+  // 规则：'direct' 表示直连，其他为 URL 前缀（如 'https://ghproxy.com/'）
+  static List<String> getUpdateMirrors() {
+    final raw = _prefs?.getString('updateMirrors');
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list.map((e) => e.toString()).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static void setUpdateMirrors(List<String> mirrors) {
+    _prefs?.setString('updateMirrors', jsonEncode(mirrors));
+  }
+
   // ===== WebDAV 配置（JSON 字符串）=====
   static String? get webdavConfig => _prefs?.getString('webdavConfig');
   static set webdavConfig(String? value) {
