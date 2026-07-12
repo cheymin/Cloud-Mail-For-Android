@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/email.dart';
 import '../../services/ai_service.dart';
 import '../../services/api_service.dart';
+import '../../services/translate_service.dart';
 import '../../utils/storage.dart';
 import '../../utils/theme.dart';
 
@@ -90,17 +91,10 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   }
 
   /// 一键翻译邮件全文
+  ///
+  /// 优先使用 LibreTranslate 免费 API（无需配置），
+  /// 失败时回退到 AI 翻译（需要配置 API Key）。
   Future<void> _translateEmail() async {
-    final ai = AiService();
-    if (!ai.isConfigured) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请先在设置中配置 AI API Key')),
-        );
-      }
-      return;
-    }
-
     setState(() => _translating = true);
 
     try {
@@ -108,16 +102,40 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
           ? _email.text
           : _email.content.replaceAll(RegExp(r'<[^>]*>'), '').trim();
 
-      final result = await ai.translateText(plainText);
-      if (result.startsWith('翻译失败') || result.startsWith('API 错误') || result.startsWith('请求失败') || result.startsWith('请先')) {
+      // 1. 先试 LibreTranslate（免费，无需配置）
+      final libreResult = await TranslateService.translateToChinese(plainText);
+
+      if (libreResult != null && libreResult.isNotEmpty) {
+        setState(() {
+          _translatedText = libreResult;
+          _showingTranslation = true;
+        });
+        return;
+      }
+
+      // 2. LibreTranslate 失败，回退到 AI 翻译
+      final ai = AiService();
+      if (!ai.isConfigured) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result)),
+            const SnackBar(content: Text('翻译服务暂不可用，请稍后重试或配置 AI API Key')),
+          );
+        }
+        return;
+      }
+
+      final aiResult = await ai.translateText(plainText);
+      if (aiResult.startsWith('API 错误') ||
+          aiResult.startsWith('请求失败') ||
+          aiResult.startsWith('请先')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(aiResult)),
           );
         }
       } else {
         setState(() {
-          _translatedText = result;
+          _translatedText = aiResult;
           _showingTranslation = true;
         });
       }

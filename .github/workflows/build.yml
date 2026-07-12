@@ -90,13 +90,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Cloud Mail App v${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## 🚀 更新内容 v4.5.3
+            ## 🚀 更新内容 v4.5.4
 
-            - 邮件详情页新增「一键翻译」功能，调用 AI 翻译全文为中文
-            - 邮件详情页全文可复制：用 SelectionArea 包裹所有内容（标题、发件人、正文、翻译结果）
-            - 设置新增「双指缩放」开关，可关闭邮件详情页的双指缩放
-            - 关闭双指缩放时隐藏缩放菜单项和底部缩放指示器
-            - WebDAV 同步新增 pinchZoomEnabled 字段
+            - 翻译功能接入 LibreTranslate 免费公共 API，无需配置即可翻译
+            - 翻译优先级：LibreTranslate（免费）→ AI 翻译（需配置 API Key）→ 提示错误
+            - 即使没配置 AI API Key，也能用翻译功能了！
 
             ## 📦 下载
 
