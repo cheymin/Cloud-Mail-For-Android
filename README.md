@@ -1,20 +1,19 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Cloud%20Mail-4.5.4-4285F4?style=for-the-badge&logo=gmail&logoColor=white" alt="Cloud Mail" />
+  <img src="assets/icon.png" width="128" height="128" alt="Cloud Mail Logo">
 </p>
 
-<h1 align="center">☁️ Cloud Mail for Android</h1>
+<h1 align="center">Cloud Mail for Android</h1>
 
 <p align="center">
-  基于 Cloud Mail API 的现代化邮件客户端，使用 Flutter 构建<br/>
-  支持 Material You 与 Apple 双主题风格
+  基于 <a href="https://github.com/cheymin/Cloud-Mail-For-Android">Cloud Mail API</a> 的现代化安卓邮件客户端，使用 Flutter 构建，支持 Material You 与 Apple 双主题风格。
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/作者-Cheymin-EA4335?style=flat-square" alt="Author" />
-  <img src="https://img.shields.io/badge/版本-v4.5.4-34A853?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/badge/平台-Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Platform" />
-  <img src="https://img.shields.io/badge/License-MIT-FBBC04?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/状态-活跃开发中-brightgreen?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter" alt="Flutter">
+  <img src="https://img.shields.io/badge/Dart-%3E%3D3.0.0-0175C2?logo=dart" alt="Dart">
+  <img src="https://img.shields.io/badge/API-Cloud%20Mail-green" alt="Cloud Mail API">
+  <img src="https://img.shields.io/badge/AI-OpenAI-412991?logo=openai" alt="OpenAI">
+  <img src="https://img.shields.io/badge/翻译-LibreTranslate-00B386" alt="LibreTranslate">
 </p>
 
 ---
@@ -27,8 +26,8 @@
 - **全部邮件**：跨账户汇总所有收件，一处查看所有邮箱的新邮件
 - **缓存优先加载**：进入页面先用本地缓存渲染，后台静默拉取最新数据，告别"加载半天"
 - **邮件详情**：HTML 正文渲染、附件预览与下载、发件人头像、收发时间
-- **双指缩放**：邮件正文支持双指捏合自由缩放（单指正常滚动，互不干扰）
-- **长按复制**：SelectionArea 包裹正文，长按弹出系统级 复制 / 分享 / 全选 菜单
+- **双指缩放**：邮件正文支持双指捏合自由缩放（单指正常滚动，互不干扰），可在设置中关闭
+- **长按复制**：SelectionArea 包裹全文，长按弹出系统级 复制 / 分享 / 全选 菜单
 - **一键翻译**：调用 LibreTranslate 免费 API 翻译全文为中文，无需配置；也可回退 AI 翻译
 - **写邮件**：全屏编辑界面，支持回复 / 转发、添加图片与附件
 - **搜索**：按主题、发件人、正文模糊搜索
@@ -47,7 +46,7 @@
 - **快速导入**：
   - 批量粘贴文本（支持 `姓名 <邮箱>`、`姓名,邮箱`、纯邮箱等格式）
   - 从文件导入 vCard（.vcf）/ CSV（.csv）
-- **WebDAV 云同步**：配置 WebDAV 服务器后可在多设备间同步联系人
+- **WebDAV 云同步**：配置 WebDAV 服务器后可在多设备间同步联系人和应用设置
 
 ### 个性化
 
@@ -68,15 +67,35 @@
 
 - 启动时检查 GitHub Releases 最新版本
 - 列出所有已发布版本，用户手动选择下载
-- **GitHub 镜像加速**：下载时可选直连 / ghproxy / moeyy / kkgithub 等镜像
+- **GitHub 镜像加速**：下载时可选直连 / ghproxy / moeyy / kkgithub 等镜像，自动测速
 - **应用内下载**：进度条显示、下载完成自动弹出安装
-- 版本号变更自动触发 GitHub Action 构建 APK 发布
+
+---
+
+## 技术栈
+
+| 项目 | 说明 |
+|------|------|
+| 框架 | Flutter (Dart SDK >= 3.0.0) |
+| 状态管理 | Provider |
+| 本地存储 | SharedPreferences（邮件缓存 + 联系人 + 个性化配置） |
+| 网络请求 | http / dio |
+| HTML 渲染 | flutter_widget_from_html_core |
+| 附件选择 | image_picker + file_picker |
+| 字体动态加载 | FontLoader |
+| 应用更新 | GitHub Releases API + dio 下载 |
+| 云同步 | WebDAV（MKCOL / PROPFIND） |
+| AI | OpenAI 兼容 Chat Completions API |
+| 翻译 | LibreTranslate 免费公共 API |
+| 持续集成 | GitHub Actions（tag `v*` 触发构建发布） |
+
+---
 
 ## 项目结构
 
 ```
 lib/
-├── main.dart                          # 应用入口 + 路由
+├── main.dart                          # 应用入口 + 主题配置 + 路由
 ├── models/
 │   ├── email.dart                     # 邮件 / 账户 数据模型
 │   └── contact.dart                   # 联系人模型 + ContactStore 本地存储
@@ -110,12 +129,14 @@ lib/
     └── glass.dart                     # 毛玻璃效果
 ```
 
+---
+
 ## 快速开始
 
 ### 环境要求
 
 - Flutter 3.x
-- Dart SDK ≥ 3.0.0
+- Dart SDK >= 3.0.0
 - Android Studio 或 VS Code
 
 ### 构建运行
@@ -138,6 +159,8 @@ flutter build apk --release
 3. 进入邮件列表即可收发邮件
 4. 在设置中配置 AI 助手、个性化、WebDAV 同步等
 
+---
+
 ## 配置说明
 
 ### AI 助手
@@ -158,15 +181,7 @@ flutter build apk --release
 
 配置后可「测试连接」、「上传配置」或「拉取配置」。
 
-## 权限
-
-| 权限 | 用途 |
-|------|------|
-| INTERNET | 网络访问（邮件 API、AI、更新检查、翻译） |
-| ACCESS_NETWORK_STATE | 网络状态检测 |
-| READ_EXTERNAL_STORAGE | 选择背景图、字体文件、vCard/CSV 导入 |
-| REQUEST_INSTALL_PACKAGES | 应用内更新安装 APK |
-| CAMERA（可选） | 拍照附件（如启用） |
+---
 
 ## 持续集成
 
@@ -182,49 +197,12 @@ git tag v4.5.4
 git push origin v4.5.4
 ```
 
+---
+
 ## License
 
 本项目仅供学习和参考使用。
 
-## 致谢
-
-- [Cloud Mail API](https://github.com/cheymin/Cloud-Mail-For-Android)
-- [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) — 免费开源翻译 API
-- 所有开源依赖库的贡献者
-
 ---
 
-## 技术栈
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter" />
-  <img src="https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white" alt="Dart" />
-  <img src="https://img.shields.io/badge/Provider-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Provider" />
-  <img src="https://img.shields.io/badge/Material_3-757575?style=for-the-badge&logo=materialdesign&logoColor=white" alt="Material 3" />
-  <img src="https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI" />
-  <img src="https://img.shields.io/badge/WebDAV-1A73E8?style=for-the-badge&logo=webdav&logoColor=white" alt="WebDAV" />
-  <img src="https://img.shields.io/badge/LibreTranslate-00B386?style=for-the-badge&logo=libretranslate&logoColor=white" alt="LibreTranslate" />
-  <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white" alt="GitHub Actions" />
-  <img src="https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" />
-</p>
-
-| 项目 | 说明 |
-|------|------|
-| 框架 | Flutter (Dart SDK ≥3.0.0) |
-| 状态管理 | Provider |
-| 本地存储 | SharedPreferences（邮件缓存 + 联系人 + 个性化配置） |
-| 网络 | http |
-| HTML 渲染 | flutter_widget_from_html_core |
-| 附件选择 | image_picker + file_picker |
-| 字体动态加载 | FontLoader |
-| 应用更新 | GitHub Releases API + dio 下载 |
-| 云同步 | WebDAV（MKCOL / PROPFIND） |
-| AI | OpenAI 兼容 Chat Completions API |
-| 翻译 | LibreTranslate 免费公共 API |
-| 持续集成 | GitHub Actions（tag `v*` 触发构建发布） |
-
----
-
-<p align="center">
-  Made with ❤ by <b>Cheymin</b>
-</p>
+Made with Flutter
